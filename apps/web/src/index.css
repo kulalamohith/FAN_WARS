@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   WARZONE — Global Styles
+   The arena is dark. The energy is HIGH. Nothing is calm.
+   ============================================================ */
+
+@layer base {
+  * { @apply box-border; }
+  body {
+    @apply bg-wz-bg text-wz-text font-sans overflow-x-hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3 { @apply font-display font-extrabold tracking-tight; }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0A0A0A; }
+  ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+  ::selection {
+    background: rgba(0, 255, 136, 0.3);
+    color: #fff;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Card */
+  .glass-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 1.25rem;
+  }
+
+  /* Neon Glow Ring */
+  .neon-ring {
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.15), 0 0 60px rgba(0, 255, 136, 0.05), inset 0 0 20px rgba(0, 255, 136, 0.03);
+  }
+
+  /* War Gradient Text */
+  .text-war-gradient {
+    background: linear-gradient(135deg, #FF2D55, #FF6B2C, #FFD60A);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Pulsing LIVE indicator */
+  .live-dot {
+    @apply w-2.5 h-2.5 rounded-full bg-wz-red;
+    animation: livePulse 1.5s ease-in-out infinite;
+  }
+}
+
+/* ============================================================
+   ANIMATED BACKGROUND — The Living Arena
+   ============================================================ */
+
+.wz-animated-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #050505;
+}
+
+/* Floating orbs */
+.wz-animated-bg::before,
+.wz-animated-bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+  animation: floatOrb 12s ease-in-out infinite;
+}
+
+.wz-animated-bg::before {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #FF2D55 0%, transparent 70%);
+  top: -20%;
+  left: -10%;
+  animation-duration: 15s;
+}
+
+.wz-animated-bg::after {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #007AFF 0%, transparent 70%);
+  bottom: -20%;
+  right: -10%;
+  animation-duration: 18s;
+  animation-delay: -5s;
+}
+
+/* Grid overlay for cyberpunk feel */
+.wz-grid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+/* Particles container */
+.wz-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.wz-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(0, 255, 136, 0.6);
+  border-radius: 50%;
+  animation: particleFloat linear infinite;
+}
+
+.wz-particle:nth-child(1)  { left: 10%; animation-duration: 20s; animation-delay: 0s; }
+.wz-particle:nth-child(2)  { left: 20%; animation-duration: 25s; animation-delay: -3s; width: 3px; height: 3px; }
+.wz-particle:nth-child(3)  { left: 35%; animation-duration: 18s; animation-delay: -7s; background: rgba(255,45,85,0.4); }
+.wz-particle:nth-child(4)  { left: 50%; animation-duration: 22s; animation-delay: -2s; }
+.wz-particle:nth-child(5)  { left: 65%; animation-duration: 30s; animation-delay: -5s; width: 3px; height: 3px; background: rgba(0,122,255,0.4); }
+.wz-particle:nth-child(6)  { left: 75%; animation-duration: 16s; animation-delay: -8s; }
+.wz-particle:nth-child(7)  { left: 85%; animation-duration: 28s; animation-delay: -1s; background: rgba(255,107,44,0.5); }
+.wz-particle:nth-child(8)  { left: 45%; animation-duration: 24s; animation-delay: -6s; width: 4px; height: 4px; }
+.wz-particle:nth-child(9)  { left: 5%;  animation-duration: 19s; animation-delay: -4s; background: rgba(191,90,242,0.4); }
+.wz-particle:nth-child(10) { left: 90%; animation-duration: 21s; animation-delay: -9s; }
+.wz-particle:nth-child(11) { left: 30%; animation-duration: 17s; animation-delay: -11s; width: 3px; height: 3px; background: rgba(255,214,10,0.3); }
+.wz-particle:nth-child(12) { left: 55%; animation-duration: 26s; animation-delay: -3s; }
+
+/* Scanline effect */
+.wz-scanline {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* ============================================================
+   KEYFRAMES
+   ============================================================ */
+
+@keyframes floatOrb {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(80px, -60px) scale(1.1); }
+  50% { transform: translate(-40px, 40px) scale(0.9); }
+  75% { transform: translate(50px, 80px) scale(1.05); }
+}
+
+@keyframes particleFloat {
+  0% {
+    transform: translateY(110vh) translateX(0);
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% {
+    transform: translateY(-10vh) translateX(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,45,85,0.7); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 8px rgba(255,45,85,0); }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(0,255,136,0.2); }
+  50% { border-color: rgba(0,255,136,0.5); }
+}
+
+@keyframes textShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes kenBurns {
+  0% { transform: scale(1) translate(0, 0); }
+  25% { transform: scale(1.08) translate(-1%, 1%); }
+  50% { transform: scale(1.12) translate(1%, -0.5%); }
+  75% { transform: scale(1.06) translate(-0.5%, -1%); }
+  100% { transform: scale(1.1) translate(0.5%, 0.5%); }
+}
+
+@keyframes colorShiftLeft {
+  0% { transform: translate(-5%, 0) scale(1); opacity: 0.3; }
+  50% { transform: translate(5%, 10%) scale(1.2); opacity: 0.5; }
+  100% { transform: translate(-3%, -5%) scale(1.1); opacity: 0.3; }
+}
+
+@keyframes colorShiftRight {
+  0% { transform: translate(5%, 0) scale(1); opacity: 0.3; }
+  50% { transform: translate(-5%, -10%) scale(1.3); opacity: 0.5; }
+  100% { transform: translate(3%, 5%) scale(1.1); opacity: 0.3; }
+}
+
+/* Utility animations */
+.animate-border-glow {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+.animate-text-shimmer {
+  background-size: 200% auto;
+  animation: textShimmer 3s linear infinite;
+}
