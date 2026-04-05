@@ -88,6 +88,7 @@ export const api = {
   leaderboard: {
     getTop: () => request<{ success: boolean; leaderboard: any[] }>('/leaderboard'),
     armies: () => request<{ success: boolean; armies: any[] }>('/leaderboard/armies'),
+    teamContext: () => request<any>('/leaderboard/team-context'),
   },
 
   // ---- Roasts ----
@@ -147,5 +148,31 @@ export const api = {
       }),
     delete: (id: string) =>
       request<{ success: boolean }>(`/posts/${id}`, { method: 'DELETE' }),
+  },
+
+  // ---- Profile ----
+  profile: {
+    me: () =>
+      request<any>('/profile/me'),
+    user: (username: string) =>
+      request<any>(`/profile/${username}`),
+    pinBadge: (badgeKey: string, pin: boolean) =>
+      request<{ success: boolean; message: string }>('/profile/badges/pin', {
+        method: 'POST', body: JSON.stringify({ badgeKey, pin }),
+      }),
+    update: (data: { bio?: string }) =>
+      request<{ success: boolean; message: string }>('/profile/me', {
+        method: 'PUT', body: JSON.stringify(data),
+      }),
+    upload: (formData: FormData) => {
+      const token = localStorage.getItem('wz_token');
+      return fetch(`${BASE}/profile/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      }).then(res => res.json());
+    },
   },
 };

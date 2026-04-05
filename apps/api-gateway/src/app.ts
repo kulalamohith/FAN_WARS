@@ -11,6 +11,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import fastifyStatic from '@fastify/static';
+import fastifyMultipart from '@fastify/multipart';
 import { config } from './config';
 import authPlugin from './plugins/auth';
 import websocketPlugin from './plugins/websocket';
@@ -23,6 +24,7 @@ import { roastsRoutes } from './routes/v1/roasts';
 import { armiesRoutes } from './routes/v1/armies';
 import { bunkersRoutes } from './routes/v1/bunkers';
 import { postsRoutes } from './routes/v1/posts';
+import { profileRoutes } from './routes/v1/profile';
 
 /**
  * Builds a fully configured Fastify instance.
@@ -49,11 +51,22 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // --- Sensible error handling (adds httpErrors, to, assert) ---
   await app.register(sensible);
+  
+  // --- Multipart for file uploads ---
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  });
 
-  // --- Static file serving for email assets ---
+  // --- Static file serving ---
   await app.register(fastifyStatic, {
     root: path.join(__dirname, '..', 'public', 'email'),
     prefix: '/email/',
+    decorateReply: false,
+  });
+
+  app.register(fastifyStatic, {
+    root: path.join(__dirname, '..', 'public', 'uploads'),
+    prefix: '/uploads/',
     decorateReply: false,
   });
 
@@ -74,6 +87,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     api.register(armiesRoutes, { prefix: '/armies' });
     api.register(bunkersRoutes, { prefix: '/bunkers' });
     api.register(postsRoutes, { prefix: '/posts' });
+    api.register(profileRoutes, { prefix: '/profile' });
   }, { prefix: '/api/v1' });
 
   // --- Health check route (always available, no auth) ---

@@ -68,4 +68,45 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
 
     return reply.send({ success: true, armies: ranked });
   });
+
+  // --- GET Team Context (/v1/leaderboard/team-context) ---
+  fastify.get(
+    '/team-context',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const user = await db.user.findUnique({ where: { id: request.user.id } });
+      if (!user) return reply.unauthorized();
+
+      // Top 10 in Army
+      const topUsers = await db.user.findMany({
+        where: { armyId: user.armyId },
+        take: 10,
+        orderBy: { totalWarPoints: 'desc' },
+      });
+
+      // Find absolute rank inside the army
+      const myRankIndex = await db.user.count({
+        where: { armyId: user.armyId, totalWarPoints: { gt: user.totalWarPoints } }
+      });
+      const myRank = myRankIndex + 1;
+
+      const mapToDTO = (u: any, rankShift: number) => ({
+        id: u.id,
+        username: u.username,
+        profilePictureUrl: u.profilePictureUrl,
+        totalWarPoints: u.totalWarPoints.toString(),
+        militaryRank: calculateRank(u.totalWarPoints),
+        rankPosition: rankShift,
+      });
+
+      const top10 = topUsers.map((u, i) => mapToDTO(u, i + 1));
+      const currentUser = mapToDTO(user, myRank);
+
+      return reply.send({
+        success: true,
+        top10,
+        currentUser
+      });
+    }
+  );
 };

@@ -201,7 +201,7 @@ export default function LoginPage() {
               key="landing"
               exit={{ opacity: 0, y: -40, scale: 0.95 }}
               transition={{ duration: 0.5 }}
-              className="fixed inset-0 z-50 bg-black"
+              className="fixed inset-0 z-50 bg-black overflow-y-auto"
             >
               <LandingHero onEnter={() => setStep('signin')} />
             </motion.div>

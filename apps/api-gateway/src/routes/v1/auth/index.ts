@@ -185,7 +185,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         username,
         passwordHash,
         armyId: army.id,
-        rank: 'Recruit',
+        rank: 'Battle Fodder',
       },
     });
 

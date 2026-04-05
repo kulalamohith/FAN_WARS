@@ -8,9 +8,9 @@ interface LandingHeroProps {
 
 export default function LandingHero({ onEnter }: LandingHeroProps) {
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden bg-black">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 bg-black overflow-y-auto overflow-x-hidden">
       {/* Background Animated Gradients / Haze */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <motion.div
           animate={{
             scale: [1, 1.2, 1],
@@ -38,7 +38,7 @@ export default function LandingHero({ onEnter }: LandingHeroProps) {
           initial={{ opacity: 0, scale: 0.8, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 1, ease: 'easeOut' }}
-          className="mb-12"
+          className="mb-8"
         >
           <RivalryBrandHeader />
         </motion.div>
@@ -48,7 +48,7 @@ export default function LandingHero({ onEnter }: LandingHeroProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.8 }}
-          className="mb-16"
+          className="mb-10"
         >
           <h1 className="text-4xl md:text-5xl font-display font-black text-white leading-tight mb-4 tracking-tight shadow-black drop-shadow-lg">
             DEFEND YOUR <br />
@@ -66,7 +66,7 @@ export default function LandingHero({ onEnter }: LandingHeroProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1, duration: 1 }}
-          className="flex justify-center gap-8 mb-16 border-y border-white/10 py-4 w-full"
+          className="flex justify-center gap-8 mb-10 border-y border-white/10 py-3 w-full"
         >
           <div className="text-center">
             <span className="block text-xl font-display font-bold text-white">10</span>
