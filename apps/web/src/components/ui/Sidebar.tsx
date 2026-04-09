@@ -1,10 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TABS, HIDDEN_ON } from '../../lib/navigation';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
 
   const shouldHide = HIDDEN_ON.some(path => location.pathname.startsWith(path));
   if (shouldHide) return null;
@@ -58,6 +60,31 @@ export default function Sidebar() {
             </button>
           );
         })}
+        {user?.isAdmin && (
+           <button
+             onClick={() => navigate('/admin')}
+             className={`relative flex items-center gap-4 w-full px-4 py-3.5 rounded-xl transition-all duration-300 group ${
+               currentPath.startsWith('/admin') ? 'bg-wz-red/20' : 'hover:bg-wz-red/10'
+             }`}
+           >
+             {currentPath.startsWith('/admin') && (
+                <motion.div
+                  layoutId="sidebarIndicator"
+                  className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-[#FF2D55]"
+                />
+             )}
+              <span className={`transition-colors duration-300 ${
+                currentPath.startsWith('/admin') ? 'text-[#FF2D55]' : 'text-[#FF2D55]/50 group-hover:text-[#FF2D55]/80'
+              }`}>
+                ⚠️
+              </span>
+              <span className={`font-mono font-bold tracking-widest text-sm transition-colors duration-300 ${
+                currentPath.startsWith('/admin') ? 'text-white' : 'text-white/40 group-hover:text-white/80'
+              }`}>
+                ADMIN HUD
+              </span>
+           </button>
+        )}
       </nav>
 
       {/* User / Logout (Optional slot) */}

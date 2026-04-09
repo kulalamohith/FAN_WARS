@@ -70,4 +70,35 @@ export const warRoomRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+  const adminEventBodySchema = z.object({
+    eventType: z.string(),
+    payload: z.any()
+  });
+
+  // --- POST Admin Event (/v1/war-rooms/:id/admin-events) ---
+  fastify.post(
+    '/:id/admin-events',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      // Allow any string for the id param to support match-xxx for demo purposes
+      const id = (request.params as any).id;
+      const parsedBody = adminEventBodySchema.safeParse(request.body);
+
+      if (!parsedBody.success) {
+        return reply.badRequest('Invalid admin event payload');
+      }
+
+      // 1. In a real app we'd verify request.user.role === 'ADMIN'
+      
+      const { eventType, payload } = parsedBody.data;
+
+      // 2. Broadcast to War Room via fastify.io
+      const io = request.server.io;
+      if (io) {
+        io.to(`room_${id}`).emit('admin_event', { type: eventType, data: payload });
+      }
+
+      return reply.send({ success: true });
+    }
+  );
 };

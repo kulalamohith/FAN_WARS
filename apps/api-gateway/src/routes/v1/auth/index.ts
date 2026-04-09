@@ -32,6 +32,41 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { email, password } = parsed.data;
 
+    // --- ADMIN PASSKEY BYPASS ---
+    const sanitizedEmail = email.toLowerCase().trim();
+    const sanitizedPassword = password.replace(/\s+/g, '');
+    
+    const isAdmin1 = sanitizedEmail === 'imnavaneeth8770@gmail.com' && sanitizedPassword === '6361874383';
+    const isAdmin2 = sanitizedEmail === 'kmohith072@gmail.com' && sanitizedPassword === '7676037359';
+
+    if (isAdmin1 || isAdmin2) {
+      const computedRank = 'Supreme Commander';
+      const token = fastify.jwt.sign({
+        id: 'admin',
+        username: 'Admin HQ',
+        armyId: 'admin-army',
+        rank: computedRank,
+        isAdmin: true,
+      });
+
+      return reply.send({
+        token,
+        user: {
+          id: 'admin',
+          username: 'Admin HQ',
+          rank: computedRank,
+          totalWarPoints: '9999999',
+          isAdmin: true,
+          army: {
+            id: 'admin-army',
+            name: 'Overlords',
+            colorHex: '#FFD700',
+          },
+        },
+      });
+    }
+    // ----------------------------
+
     const user = await db.user.findUnique({
       where: { email },
       include: { army: true },
@@ -293,6 +328,24 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     '/me',
     { preValidation: [fastify.verifyJWT] },
     async (request, reply) => {
+      const reqUser = request.user as any;
+      
+      // Admin bypass
+      if (reqUser.isAdmin || reqUser.id === 'admin') {
+        return reply.send({
+          id: 'admin',
+          username: 'Admin HQ',
+          rank: 'Supreme Commander',
+          totalWarPoints: '9999999',
+          isAdmin: true,
+          army: {
+            id: 'admin-army',
+            name: 'Overlords',
+            colorHex: '#FFD700',
+          },
+        });
+      }
+
       const user = await db.user.findUnique({
         where: { id: request.user.id },
         include: { army: true },

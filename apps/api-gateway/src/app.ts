@@ -8,6 +8,12 @@
 import path from 'path';
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+
+// Global BigInt serialization patch for Fastify/JSON.stringify
+// @ts-ignore
+BigInt.prototype.toJSON = function () {
+  return typeof this === 'bigint' ? Number(this) : this;
+};
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import fastifyStatic from '@fastify/static';
@@ -25,6 +31,7 @@ import { armiesRoutes } from './routes/v1/armies';
 import { bunkersRoutes } from './routes/v1/bunkers';
 import { postsRoutes } from './routes/v1/posts';
 import { profileRoutes } from './routes/v1/profile';
+import { adminRoutes } from './routes/v1/admin';
 
 /**
  * Builds a fully configured Fastify instance.
@@ -88,6 +95,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     api.register(bunkersRoutes, { prefix: '/bunkers' });
     api.register(postsRoutes, { prefix: '/posts' });
     api.register(profileRoutes, { prefix: '/profile' });
+    api.register(adminRoutes, { prefix: '/admin' });
   }, { prefix: '/api/v1' });
 
   // --- Health check route (always available, no auth) ---

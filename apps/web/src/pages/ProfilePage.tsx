@@ -109,6 +109,8 @@ export default function ProfilePage() {
   const teamTheme = getArmyTheme(profile?.army?.name, defaultArmyColor);
   const armyColor = teamTheme.color;
 
+  const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
+
   /* ── Loading State ── */
   if (isLoading) {
     return (
@@ -125,7 +127,6 @@ export default function ProfilePage() {
     );
   }
 
-  const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
   const progressPct = profile?.rank?.progress ? Math.round(profile.rank.progress * 100) : 0;
 
   return (

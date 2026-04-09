@@ -66,6 +66,10 @@ export const api = {
   warRooms: {
     get: (id: string) =>
       request<{ id: string; matchId: string; toxicity: any; activePredictions: any[] }>(`/war-rooms/${id}`),
+    adminEvent: (id: string, eventType: string, payload: any) =>
+      request<{ success: boolean; }>(`/war-rooms/${id}/admin-events`, {
+        method: 'POST', body: JSON.stringify({ eventType, payload })
+      }),
   },
 
   // ---- Predictions ----

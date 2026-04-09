@@ -38,6 +38,7 @@ interface WarRoomState {
   liveReactions: LiveReaction[];
   bunkerMessages: ChatMessage[];
   pendingBunkerId: string | null;
+  activeAdminEvent: { type: string; data: any } | null;
   
   // Actions
   connect: (matchId: string) => void;
@@ -51,6 +52,7 @@ interface WarRoomState {
 
   removePrediction: (id: string) => void;
   removeReaction: (id: string) => void;
+  clearAdminEvent: () => void;
   reset: () => void;
 }
 
@@ -64,6 +66,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   liveReactions: [],
   bunkerMessages: [],
   pendingBunkerId: null,
+  activeAdminEvent: null,
 
   connect: (matchId: string) => {
     // Prevent multiple connections
@@ -123,6 +126,11 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       setTimeout(() => {
         get().removeReaction(id);
       }, 3000);
+    });
+
+    // Handle Admin Events
+    socket.on('admin_event', (event: { type: string; data: any }) => {
+      set({ activeAdminEvent: event });
     });
 
     // Handle bunker messages
@@ -194,5 +202,9 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     }));
   },
 
-  reset: () => set({ messages: [], bunkerMessages: [], toxicityHome: 50, toxicityAway: 50, activePredictions: [], liveReactions: [] })
+  clearAdminEvent: () => {
+    set({ activeAdminEvent: null });
+  },
+
+  reset: () => set({ messages: [], bunkerMessages: [], toxicityHome: 50, toxicityAway: 50, activePredictions: [], liveReactions: [], activeAdminEvent: null })
 }));

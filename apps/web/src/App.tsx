@@ -21,6 +21,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user && !user.isAdmin) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -51,7 +59,7 @@ export default function App() {
         <Route path="/posts" element={<ProtectedRoute><PostsPage /></ProtectedRoute>} />
         <Route path="/polls" element={<ProtectedRoute><PollsPage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
         <Route path="/roasts" element={<ProtectedRoute><RoastFeedPage /></ProtectedRoute>} />
         <Route path="/war-room/:id" element={<ProtectedRoute><WarRoomPage /></ProtectedRoute>} />

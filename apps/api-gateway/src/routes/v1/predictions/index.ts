@@ -23,8 +23,8 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
     questionText: z.string(),
     optionA: z.string(),
     optionB: z.string(),
-    pointsReward: z.number().int().positive(),
-    durationMs: z.number().int().positive().default(15000), // Default 15s
+    pointsReward: z.coerce.number().int().positive(),
+    durationMs: z.coerce.number().int().positive().default(15000), // Default 15s
   });
 
   const resolveBodySchema = z.object({
@@ -113,51 +113,58 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/trigger/:matchId',
     async (request, reply) => {
-      const parsedParams = triggerParamsSchema.safeParse(request.params);
+      const { matchId } = request.params as any;
       const parsedBody = triggerBodySchema.safeParse(request.body);
 
-      if (!parsedParams.success || !parsedBody.success) {
-        return reply.badRequest('Invalid payload or match ID');
+      if (!parsedBody.success) {
+        return reply.badRequest(`Invalid payload: ${parsedBody.error.message}`);
       }
 
-      const { matchId } = parsedParams.data;
       const { questionText, optionA, optionB, pointsReward, durationMs } = parsedBody.data;
 
-      // 1. Verify Match exists
-      const match = await db.match.findUnique({ where: { id: matchId } });
-      if (!match) return reply.notFound('Match not found');
+      // Handle demo mode matches (hardcoded in frontend schedule)
+      const isDemo = matchId.startsWith('match-');
+      let predictionId = `demo-pred-${Date.now()}`;
+      let expiresAt = new Date(Date.now() + durationMs);
 
-      const expiresAt = new Date(Date.now() + durationMs);
+      if (!isDemo) {
+        // 1. Verify Match exists
+        const match = await db.match.findUnique({ where: { id: matchId } });
+        if (!match) return reply.notFound('Match not found');
 
-      // 2. Create Prediction in DB
-      const prediction = await db.prediction.create({
-        data: {
-          matchId,
-          questionText,
-          optionA,
-          optionB,
-          pointsReward,
-          expiresAt,
-          status: 'ACTIVE',
-        }
-      });
+        // 2. Create Prediction in DB
+        const prediction = await db.prediction.create({
+          data: {
+            matchId,
+            questionText,
+            optionA,
+            optionB,
+            pointsReward,
+            expiresAt,
+            status: 'ACTIVE',
+          }
+        });
+        predictionId = prediction.id;
+        expiresAt = prediction.expiresAt;
+      }
 
       // 3. Broadcast to War Room via fastify.io
       const io = request.server.io;
       if (io) {
         io.to(`room_${matchId}`).emit('NEW_PREDICTION', {
-          id: prediction.id,
-          question: prediction.questionText,
-          optionA: prediction.optionA,
-          optionB: prediction.optionB,
-          pointsReward: prediction.pointsReward,
-          expiresAt: prediction.expiresAt.toISOString()
+          id: predictionId,
+          question: questionText,
+          optionA,
+          optionB,
+          pointsReward,
+          expiresAt: expiresAt.toISOString()
         });
       }
 
       return reply.send({
         success: true,
-        prediction,
+        message: isDemo ? 'Demo prediction broadcasted' : 'Prediction created and broadcasted',
+        predictionId
       });
     }
   );

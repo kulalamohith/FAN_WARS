@@ -9,19 +9,13 @@ import { create } from 'zustand';
 interface User {
   id: string;
   username: string;
-  rank: string;
+  rank: any; // Can be string or extended object
   totalWarPoints: string;
   favoriteArmyId?: string;
   army: { id: string; name: string; colorHex: string };
-  // Extended rank info (populated from profile endpoint)
-  rank?: {
-    level: number;
-    shortCode: string;
-    color: string;
-    icon: string;
-  };
   profilePictureUrl?: string | null;
   bio?: string | null;
+  isAdmin?: boolean;
 }
 
 interface AuthState {
