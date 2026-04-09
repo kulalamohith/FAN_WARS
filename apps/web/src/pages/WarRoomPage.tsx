@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlassCard from '../components/ui/GlassCard';
 import WarzoneButton from '../components/ui/WarzoneButton';
-import ToxicityBar from '../components/ui/ToxicityBar';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 import { RankBadge } from '../components/ui/RankBadge';
 import { api } from '../lib/api';
@@ -35,11 +34,13 @@ export default function WarRoomPage() {
   const [showSniperDuel, setShowSniperDuel] = useState(false);
   const [towScore, setTowScore] = useState(50);
   
-  // Specific prediction/game state
   const [votedChaos, setVotedChaos] = useState(false);
   const [votedChaosOption, setVotedChaosOption] = useState<'A'|'B'>();
 
-  // Random Event Engine removed, driven dynamically through backend admin_event now.
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -50,37 +51,37 @@ export default function WarRoomPage() {
     }
   }, [messages.length, user]);
 
-  useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const matchId = id?.startsWith('match-') ? id : `match-${id}`;
 
   useEffect(() => {
-    if (id) connect(id);
+    if (matchId) connect(matchId);
     return () => disconnect();
-  }, [id, connect, disconnect]);
+  }, [matchId, connect, disconnect]);
 
   const { data: room, isLoading, error } = useQuery({
-    queryKey: ['warRoom', id],
+    queryKey: ['warRoom', matchId],
     queryFn: async () => {
-      if (id?.startsWith('match-')) {
-        // Instant mock room for static datasets to prevent infinite loading or networking retries
-        return {
-          id,
-          status: 'LIVE',
-          toxicity: {
-            homeScore: 50,
-            awayScore: 50,
-            homeArmyId: 'Home Faction',
-            awayArmyId: 'Away Faction',
-          },
-          activePredictions: []
-        };
+      try {
+        return await api.warRooms.get(matchId);
+      } catch (e) {
+        if (matchId.startsWith('match-')) {
+          return {
+            id: matchId,
+            status: 'LIVE',
+            toxicity: {
+              homeScore: 50,
+              awayScore: 50,
+              homeArmyId: 'Home Faction',
+              awayArmyId: 'Away Faction',
+            },
+            activePredictions: []
+          };
+        }
+        throw e;
       }
-      return api.warRooms.get(id!);
     },
-    enabled: !!id,
-    refetchInterval: id?.startsWith('match-') ? false : 5000,
+    enabled: !!matchId,
+    refetchInterval: 5000,
   });
 
   const allActivePredictions = useMemo(() => {
@@ -95,15 +96,15 @@ export default function WarRoomPage() {
       api.predictions.vote(predId, option),
     onSuccess: (_data, variables) => {
       setVotedPredictions((prev) => new Set(prev).add(variables.predId));
-      queryClient.invalidateQueries({ queryKey: ['warRoom', id] });
+      queryClient.invalidateQueries({ queryKey: ['warRoom', matchId] });
     },
   });
 
   const handleSendChat = () => {
-    if (!chatInput.trim() || !id || !user || !room) return;
+    if (!chatInput.trim() || !matchId || !user || !room) return;
     const isHomeArmy = user.favoriteArmyId === room.toxicity?.homeArmyId;
     sendMessage({
-      matchId: id,
+      matchId: matchId,
       text: chatInput,
       userId: user.id,
       username: user.username,
@@ -128,8 +129,7 @@ export default function WarRoomPage() {
     );
   }
 
-  const isDemo = id?.startsWith('match-');
-  if (!isDemo && (error || !room)) {
+  if (error || !room) {
     return (
       <div className="relative min-h-screen">
         <AnimatedBackground />
@@ -137,7 +137,7 @@ export default function WarRoomPage() {
           <GlassCard className="text-center max-w-md p-8 border-wz-red/20">
             <p className="text-5xl mb-4">💀</p>
             <p className="text-wz-red text-lg font-display font-bold mb-2">ROOM UNAVAILABLE</p>
-            <p className="text-wz-muted text-xs font-mono mb-6">This match room may have ended.</p>
+            <p className="text-wz-muted text-xs font-mono mb-6">This match room may have ended or does not exist.</p>
             <WarzoneButton variant="ghost" onClick={() => navigate('/')}>← Back</WarzoneButton>
           </GlassCard>
         </div>
@@ -163,7 +163,8 @@ export default function WarRoomPage() {
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-black">
       <AnimatedBackground />
 
-      <div className="pointer-events-none fixed inset-0 z-[45] overflow-hidden">
+      {/* Fullscreen Overlays (Pointer events none on wrapper) */}
+      <div className="pointer-events-none fixed inset-0 z-[100] overflow-hidden">
         <AnimatePresence>
           {liveReactions.map((reaction) => {
             const startX = `${30 + Math.random() * 40}vw`;
@@ -190,57 +191,10 @@ export default function WarRoomPage() {
             myUsername={user?.username || 'GUEST'}
             myTeam={user?.favoriteArmyId || 'UNKNOWN'}
             myColor={user?.army?.colorHex || '#00FF88'}
-            matchId={id!}
+            matchId={matchId}
             onClose={() => setShowSniperDuel(false)}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {activeAdminEvent?.type === 'traitors' && (
-          <TraitorsDilemma 
-             losingTeam={activeAdminEvent.data?.losingTeam || room?.toxicity?.awayArmyId || 'Rivals'}
-             winningTeam={activeAdminEvent.data?.winningTeam || room?.toxicity?.homeArmyId || 'Home Team'}
-             pointsReward={activeAdminEvent.data?.pointsReward || 5000}
-             onAccept={() => { setTimeout(() => clearAdminEvent(), 2000); }}
-             onReject={() => clearAdminEvent()}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {activeAdminEvent?.type === 'chaos' && (
-           <div className="fixed top-32 left-4 right-4 z-[80] mx-auto max-w-md pointer-events-auto">
-             <ChaosPrediction 
-               question={activeAdminEvent.data?.question || "Will this over turn completely chaotic?"}
-               optionA={activeAdminEvent.data?.optionA || "YES (MADNESS)"}
-               optionB={activeAdminEvent.data?.optionB || "NO (BORING)"}
-               multiplier={activeAdminEvent.data?.multiplier || 2.5}
-               secondsLeft={activeAdminEvent.data?.durationSeconds || 15}
-               voted={votedChaos}
-               votedOption={votedChaosOption}
-               onVote={(opt) => { 
-                 setVotedChaos(true); 
-                 setVotedChaosOption(opt); 
-                 setTimeout(() => clearAdminEvent(), 3000); 
-               }}
-               votesA={activeAdminEvent.data?.votesA || 50}
-               votesB={activeAdminEvent.data?.votesB || 50}
-             />
-           </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-         {activeAdminEvent?.type === 'jinx' && (
-           <JinxMinigame 
-              targetPlayer={activeAdminEvent.data?.targetPlayer || "Star Player"}
-              targetTeam={activeAdminEvent.data?.targetTeam || "Rival"}
-              mode={activeAdminEvent.data?.mode || "jinx"}
-              onComplete={() => setTimeout(() => clearAdminEvent(), 3000)}
-              onClose={() => clearAdminEvent()}
-           />
-         )}
       </AnimatePresence>
 
       <header className="sticky top-0 z-50 bg-black/70 backdrop-blur-2xl border-b border-wz-border/20">
@@ -277,33 +231,112 @@ export default function WarRoomPage() {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 max-w-xl mx-auto w-full px-5 pt-4 pb-40 flex flex-col">
+      <main className="relative z-10 flex-1 max-w-xl mx-auto w-full px-5 pt-4 pb-48 flex flex-col">
+        {/* Dynamic Admin Event Banners (Centered and Flowing) */}
         <AnimatePresence>
-          {allActivePredictions.map((pred: any) => {
-            const msLeft = Math.max(0, new Date(pred.expiresAt).getTime() - currentTime);
-            return !votedPredictions.has(pred.id) && (
-              <motion.div key={pred.id} initial={{ opacity: 0, y: -80, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9, y: -30 }} className="mb-5">
+          {activeAdminEvent?.type === 'chaos' && (
+            <motion.div 
+              initial={{ opacity: 0, y: -40, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="mb-6 relative z-[60]"
+            >
+              <ChaosPrediction 
+                question={activeAdminEvent.data?.question || "Will this over turn completely chaotic?"}
+                optionA={activeAdminEvent.data?.optionA || "YES (MADNESS)"}
+                optionB={activeAdminEvent.data?.optionB || "NO (BORING)"}
+                multiplier={activeAdminEvent.data?.multiplier || 2.5}
+                secondsLeft={activeAdminEvent.data?.durationSeconds || 15}
+                voted={votedChaos}
+                votedOption={votedChaosOption}
+                onVote={(opt) => { 
+                  setVotedChaos(true); 
+                  setVotedChaosOption(opt); 
+                  setTimeout(() => clearAdminEvent(), 3000); 
+                }}
+                votesA={activeAdminEvent.data?.votesA || 50}
+                votesB={activeAdminEvent.data?.votesB || 50}
+              />
+            </motion.div>
+          )}
+
+          {activeAdminEvent?.type === 'traitors' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="mb-6 relative z-[60]"
+            >
+              <TraitorsDilemma 
+                losingTeam={activeAdminEvent.data?.losingTeam || "Rivals"}
+                winningTeam={activeAdminEvent.data?.winningTeam || "Allies"}
+                pointsReward={activeAdminEvent.data?.pointsReward || 5000}
+                onAccept={() => setTimeout(() => clearAdminEvent(), 2000)}
+                onReject={() => clearAdminEvent()}
+              />
+            </motion.div>
+          )}
+
+          {activeAdminEvent?.type === 'jinx' && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="mb-6 relative z-[60]"
+            >
+              <JinxMinigame 
+                targetPlayer={activeAdminEvent.data?.targetPlayer || "Star Player"}
+                targetTeam={activeAdminEvent.data?.targetTeam || "Rival"}
+                mode={activeAdminEvent.data?.mode || "jinx"}
+                onComplete={() => setTimeout(() => clearAdminEvent(), 3000)}
+                onClose={() => clearAdminEvent()}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Prediction List */}
+        <AnimatePresence>
+          {allActivePredictions.map((pred: any) => (
+            !votedPredictions.has(pred.id) && (
+              <motion.div 
+                key={pred.id} 
+                initial={{ opacity: 0, y: -20 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.9 }} 
+                className="mb-5 relative z-20"
+              >
                 <div className="glass-card p-6 border border-wz-yellow/30 shadow-[0_0_40px_rgba(255,214,10,0.1)]">
                   <div className="flex justify-between mb-3">
                     <span className="text-[9px] uppercase font-bold text-wz-yellow tracking-widest">⚡ Prediction</span>
                     <span className="text-xs font-mono text-wz-neon">+{pred.pointsReward} WP</span>
                   </div>
-                  <p className="font-display font-bold text-xl mb-4">{pred.question}</p>
+                  <p className="font-display font-bold text-lg mb-4">{pred.question}</p>
                   <div className="grid grid-cols-2 gap-3">
-                    <WarzoneButton loading={voteMutation.isPending} onClick={() => voteMutation.mutate({ predId: pred.id, option: 'A' })} className="text-sm py-3 cursor-pointer">
+                    <WarzoneButton 
+                      loading={voteMutation.isPending} 
+                      onClick={() => voteMutation.mutate({ predId: pred.id, option: 'A' })} 
+                      className="text-xs py-3 cursor-pointer z-30"
+                    >
                       {pred.optionA}
                     </WarzoneButton>
-                    <WarzoneButton variant="danger" loading={voteMutation.isPending} onClick={() => voteMutation.mutate({ predId: pred.id, option: 'B' })} className="text-sm py-3 cursor-pointer">
+                    <WarzoneButton 
+                      variant="danger" 
+                      loading={voteMutation.isPending} 
+                      onClick={() => voteMutation.mutate({ predId: pred.id, option: 'B' })} 
+                      className="text-xs py-3 cursor-pointer z-30"
+                    >
                       {pred.optionB}
                     </WarzoneButton>
                   </div>
                 </div>
               </motion.div>
-            );
-          })}
+            )
+          ))}
         </AnimatePresence>
 
-        <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-[200px] flex flex-col-reverse rounded-xl">
+        {/* Chat Feed */}
+        <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-[200px] flex flex-col-reverse rounded-xl scrollbar-hide">
           <AnimatePresence initial={false}>
             {messages.length === 0 ? (
               <motion.p className="text-wz-muted text-xs font-mono text-center mb-10">No messages yet. Start the war.</motion.p>
@@ -313,8 +346,13 @@ export default function WarRoomPage() {
                 const isAlly = user?.favoriteArmyId === msg.armyId;
                 const accentColor = isMe ? '#00FF88' : isAlly ? '#64D2FF' : '#FF2D55';
                 return (
-                  <motion.div key={msg.id} layout initial={{ opacity: 0, scale: 0.9, x: isAlly ? -15 : 15 }} animate={{ opacity: 1, scale: 1, x: 0 }}
-                    className={`text-sm py-2 px-3 rounded-lg border-l-4 flex flex-col items-start gap-1 my-1 ${isAlly ? 'bg-white/5 border-l-wz-blue/50' : 'bg-wz-red/10 border-l-[#FF2D55]/50'}`} style={{ borderLeftColor: accentColor }}
+                  <motion.div 
+                    key={msg.id} 
+                    layout 
+                    initial={{ opacity: 0, scale: 0.9 }} 
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`text-sm py-2 px-3 rounded-lg border-l-4 flex flex-col items-start gap-1 my-1 ${isAlly ? 'bg-white/5 border-l-wz-blue/50' : 'bg-wz-red/10 border-l-[#FF2D55]/50'}`} 
+                    style={{ borderLeftColor: accentColor }}
                   >
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="font-bold font-mono text-[11px]" style={{ color: accentColor }}>{msg.username}</span>
@@ -328,38 +366,56 @@ export default function WarRoomPage() {
           </AnimatePresence>
         </div>
 
+        {/* Chat Control Fixed Bottom */}
         <div className="fixed bottom-0 left-0 right-0 z-[60] bg-black/90 backdrop-blur-2xl border-t border-wz-border/20 p-4">
           <div className="max-w-xl mx-auto">
             <AnimatePresence>
               {showSoundboard && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-4 rounded-xl bg-white/5 border border-white/10 p-4">
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }} 
+                  animate={{ height: 'auto', opacity: 1 }} 
+                  exit={{ height: 0, opacity: 0 }} 
+                  className="overflow-hidden mb-4 rounded-xl bg-white/5 border border-white/10 p-4"
+                >
                    <Soundboard 
-                     onPress={(id) => sendReaction({ matchId: id!, type: id === 'fire' || id === 'laugh' || id === 'rage' || id === 'heart' || id === 'clap' || id === 'skull' || id === 'crown' || id === 'mindblown' ? id : 'fire' })} 
+                     onPress={(type) => sendReaction({ matchId: matchId, type: type })} 
                      opponentTeam={room?.toxicity?.awayArmyId || "Rival"} 
-                     disrupted={Math.random() > 0.8}
                    />
                 </motion.div>
               )}
             </AnimatePresence>
 
             {!showSoundboard && (
-              <div className="flex justify-start gap-1 sm:gap-2 mb-3 overflow-x-auto pb-2 scrollbar-hide">
-                {(['fire', 'laugh', 'rage', 'heart', 'clap', 'skull', 'crown', 'mindblown'] as const).map((type) => {
-                  const emoji = getStormEmoji(type);
-                  return (
-                    <motion.button key={type} whileTap={{ scale: 0.85 }} onClick={() => sendReaction({ matchId: id!, type })} className="flex-shrink-0 w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-sm hover:bg-white/10 hover:border-wz-red/50 transition-colors">
-                      {emoji}
-                    </motion.button>
-                  );
-                })}
+              <div className="flex justify-start gap-2 mb-3 overflow-x-auto pb-2 scrollbar-hide">
+                {(['fire', 'laugh', 'rage', 'heart', 'clap', 'skull', 'crown', 'mindblown'] as const).map((type) => (
+                  <motion.button 
+                    key={type} 
+                    whileTap={{ scale: 0.8 }} 
+                    onClick={() => sendReaction({ matchId: matchId, type })} 
+                    className="flex-shrink-0 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-base hover:bg-white/10 transition-colors"
+                  >
+                    {getStormEmoji(type)}
+                  </motion.button>
+                ))}
               </div>
             )}
 
             <div className="flex gap-2">
-              <button onClick={() => setShowSoundboard(!showSoundboard)} className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-colors ${showSoundboard ? 'bg-wz-red border-wz-red text-white' : 'bg-white/5 border-white/10 text-white/50'}`}>
+              <button 
+                onClick={() => setShowSoundboard(!showSoundboard)} 
+                className={`shrink-0 w-12 h-12 flex items-center justify-center rounded-xl border transition-colors ${showSoundboard ? 'bg-wz-red border-wz-red text-white' : 'bg-white/5 border-white/10 text-white/50'}`}
+              >
                 🔊
               </button>
-              <input id="chat-input" type="text" placeholder="Declare war..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendChat()} className="flex-1 bg-wz-surface border border-wz-border/40 rounded-xl px-4 py-3 text-sm text-wz-white font-mono focus:outline-none focus:border-wz-neon/50 focus:shadow-[0_0_15px_rgba(0,255,136,0.1)] transition-all min-w-0" />
+              <input 
+                id="chat-input" 
+                type="text" 
+                placeholder="Declare war..." 
+                value={chatInput} 
+                onChange={(e) => setChatInput(e.target.value)} 
+                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()} 
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-wz-neon/50 transition-all" 
+              />
               <WarzoneButton onClick={handleSendChat} className="px-5 shrink-0 cursor-pointer">⚔️</WarzoneButton>
             </div>
           </div>

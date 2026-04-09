@@ -8,7 +8,7 @@ import { db } from '../../../lib/db';
 
 export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   const paramsSchema = z.object({
-    id: z.string().uuid(),
+    id: z.string(),
   });
 
   const bodySchema = z.object({
@@ -16,7 +16,7 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   const triggerParamsSchema = z.object({
-    matchId: z.string().uuid(),
+    matchId: z.string(),
   });
 
   const triggerBodySchema = z.object({
@@ -123,30 +123,44 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
       const { questionText, optionA, optionB, pointsReward, durationMs } = parsedBody.data;
 
       // Handle demo mode matches (hardcoded in frontend schedule)
-      const isDemo = matchId.startsWith('match-');
-      let predictionId = `demo-pred-${Date.now()}`;
-      let expiresAt = new Date(Date.now() + durationMs);
-
-      if (!isDemo) {
-        // 1. Verify Match exists
-        const match = await db.match.findUnique({ where: { id: matchId } });
-        if (!match) return reply.notFound('Match not found');
-
-        // 2. Create Prediction in DB
-        const prediction = await db.prediction.create({
-          data: {
-            matchId,
-            questionText,
-            optionA,
-            optionB,
-            pointsReward,
-            expiresAt,
-            status: 'ACTIVE',
-          }
-        });
-        predictionId = prediction.id;
-        expiresAt = prediction.expiresAt;
+      // 1. Ensure Match exists (even for demo matches like 'match-1')
+      let match = await db.match.findUnique({ where: { id: matchId } });
+      
+      if (!match) {
+        if (matchId.startsWith('match-')) {
+          // Create placeholder match for demo/testing
+          const armies = await db.army.findMany({ take: 2 });
+          if (armies.length < 2) return reply.internalServerError('Not enough armies seeded to create demo match');
+          
+          match = await db.match.create({
+            data: {
+              id: matchId,
+              homeArmyId: armies[0].id,
+              awayArmyId: armies[1].id,
+              status: 'LIVE',
+              startTime: new Date(),
+            }
+          });
+        } else {
+          return reply.notFound('Match not found');
+        }
       }
+
+      // 2. Create Prediction in DB
+      const prediction = await db.prediction.create({
+        data: {
+          matchId,
+          questionText,
+          optionA,
+          optionB,
+          pointsReward,
+          expiresAt: new Date(Date.now() + durationMs),
+          status: 'ACTIVE',
+        }
+      });
+      
+      const predictionId = prediction.id;
+      const expiresAt = prediction.expiresAt;
 
       // 3. Broadcast to War Room via fastify.io
       const io = request.server.io;

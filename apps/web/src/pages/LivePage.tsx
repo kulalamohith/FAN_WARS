@@ -126,10 +126,9 @@ function MatchCard({
 export default function LivePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [now, setNow] = useState(new Date('2026-04-07T06:22:49+05:30')); // Default to exactly provided time
+  const [now, setNow] = useState(new Date());
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
-
 
   useEffect(() => {
     const timer = setInterval(() => {
