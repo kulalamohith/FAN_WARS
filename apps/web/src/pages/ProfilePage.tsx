@@ -63,6 +63,7 @@ export default function ProfilePage() {
   const [isSharing, setIsSharing] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile-me'],
@@ -109,7 +110,7 @@ export default function ProfilePage() {
   const teamTheme = getArmyTheme(profile?.army?.name, defaultArmyColor);
   const armyColor = teamTheme.color;
 
-  const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
+
 
   /* ── Loading State ── */
   if (isLoading) {
@@ -126,6 +127,7 @@ export default function ProfilePage() {
       </div>
     );
   }
+
 
   const progressPct = profile?.rank?.progress ? Math.round(profile.rank.progress * 100) : 0;
 
