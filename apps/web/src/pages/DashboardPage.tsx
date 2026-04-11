@@ -120,10 +120,24 @@ export default function DashboardPage() {
             <img src="/logo_shield.png" alt="" className="w-8 h-8 object-contain" />
             <span className="text-white font-display font-black text-sm tracking-wider">RIVALRY</span>
           </div>
-          <div className="hidden md:flex ml-4">
-             {/* Desktop placeholder for left side of header if needed */}
+          <div className="flex-1 flex justify-end items-center gap-4 mr-4">
+             <div className="hidden md:flex items-center gap-2">
+                 <button 
+                  onClick={() => { matches.length ? setShowCreateBunker(matches[0].id) : alert('No live matches!'); }} 
+                  className="px-3 py-1.5 rounded-lg bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 border border-[#FFD60A]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all"
+                 >
+                   🛡️ Host Private
+                 </button>
+                 <button 
+                  onClick={() => setShowJoinBunker(true)} 
+                  className="px-3 py-1.5 rounded-lg bg-[#00FF88]/10 text-[#00FF88] hover:bg-[#00FF88]/20 border border-[#00FF88]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all"
+                 >
+                   🔗 Join Room
+                 </button>
+             </div>
           </div>
-          <div onClick={() => navigate('/profile')} className="flex items-center gap-2 cursor-pointer group">
+          
+          <div onClick={() => navigate('/profile')} className="flex items-center gap-2 cursor-pointer group shrink-0">
             <div className="text-right">
               <p className="text-white text-[11px] font-bold leading-none group-hover:text-white/80 transition-colors">{user?.username || 'Fan'}</p>
               <p className="text-[9px] font-mono mt-0.5" style={{ color: armyColor }}>{armyName}</p>

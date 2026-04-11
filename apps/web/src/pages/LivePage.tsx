@@ -3,6 +3,22 @@ import GlassCard from '../components/ui/GlassCard';
 import { useNavigate } from 'react-router-dom';
 import { IPL_2026_SCHEDULE, IPLMatch } from '../data/ipl2026';
 import { useAuthStore } from '../stores/authStore';
+import { useMutation } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import WarzoneButton from '../components/ui/WarzoneButton';
+import { motion } from 'framer-motion';
+
+function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-5" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-sm rounded-2xl border border-white/10 p-6" style={{ background: 'rgba(15,15,15,0.97)', backdropFilter: 'blur(20px)' }}>
+        {children}
+      </motion.div>
+    </div>
+  );
+}
 
 // Define team colors for UI
 const TEAM_COLORS: Record<string, string> = {
@@ -130,6 +146,22 @@ export default function LivePage() {
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
 
+  // Private War Room State
+  const [showCreateBunker, setShowCreateBunker] = useState('');
+  const [showJoinBunker, setShowJoinBunker] = useState(false);
+  const [bunkerName, setBunkerName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+
+  const createBunkerMut = useMutation({
+    mutationFn: (matchId: string) => api.bunkers.create(bunkerName, matchId),
+    onSuccess: (r) => { setShowCreateBunker(''); setBunkerName(''); navigate(`/bunkers/${r.bunker.id}`); },
+  });
+
+  const joinBunkerMut = useMutation({
+    mutationFn: () => api.bunkers.join(inviteCode),
+    onSuccess: (r) => { setShowJoinBunker(false); setInviteCode(''); navigate(`/bunkers/${r.bunkerId}`); },
+  });
+
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
@@ -183,9 +215,26 @@ export default function LivePage() {
         
         {/* LIVE SECTION */}
         <div className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="live-dot" />
-            <h1 className="text-2xl md:text-3xl font-display font-black text-white tracking-tight">LIVE BATTLEFIELDS</h1>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="live-dot" />
+              <h1 className="text-2xl md:text-3xl font-display font-black text-white tracking-tight">LIVE BATTLEFIELDS</h1>
+            </div>
+            {/* Host/Join Buttons */}
+            <div className="flex items-center gap-2">
+                 <button 
+                  onClick={() => { liveMatches.length ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches right now!'); }} 
+                  className="px-3 py-1.5 rounded-lg bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 border border-[#FFD60A]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(255,214,10,0.1)]"
+                 >
+                   🛡️ Host Private
+                 </button>
+                 <button 
+                  onClick={() => setShowJoinBunker(true)} 
+                  className="px-3 py-1.5 rounded-lg bg-[#00FF88]/10 text-[#00FF88] hover:bg-[#00FF88]/20 border border-[#00FF88]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(0,255,136,0.1)]"
+                 >
+                   🔗 Join Room
+                 </button>
+            </div>
           </div>
           
           {liveMatches.length === 0 ? (
@@ -271,6 +320,27 @@ export default function LivePage() {
             </div>
           )}
         </div>
+
+        {/* MODALS FOR HOST/JOIN */}
+        <Modal open={!!showCreateBunker} onClose={() => setShowCreateBunker('')}>
+          <h2 className="text-lg font-display font-bold text-[#FFD60A] mb-1">Create Private War Room 🛡️</h2>
+          <p className="text-white/40 text-xs mb-4">Host a private watch room for your squad.</p>
+          <input type="text" placeholder="Room Name" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 mb-4 outline-none text-sm" />
+          <div className="flex gap-2">
+            <WarzoneButton variant="ghost" fullWidth onClick={() => setShowCreateBunker('')}>Cancel</WarzoneButton>
+            <WarzoneButton fullWidth onClick={() => createBunkerMut.mutate(showCreateBunker)} disabled={bunkerName.length < 3 || createBunkerMut.isPending}>Create</WarzoneButton>
+          </div>
+        </Modal>
+
+        <Modal open={showJoinBunker} onClose={() => setShowJoinBunker(false)}>
+          <h2 className="text-lg font-display font-bold text-[#FF2D55] mb-1">Join Private War Room 🔒</h2>
+          <p className="text-white/40 text-xs mb-4">Enter a 6-character room code.</p>
+          <input type="text" placeholder="ROOM CODE" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} maxLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-[#FF2D55]/50 mb-4 outline-none uppercase text-sm" />
+          <div className="flex gap-2">
+            <WarzoneButton variant="ghost" fullWidth onClick={() => setShowJoinBunker(false)}>Cancel</WarzoneButton>
+            <WarzoneButton variant="danger" fullWidth onClick={() => joinBunkerMut.mutate()} disabled={inviteCode.length < 5 || joinBunkerMut.isPending}>Join</WarzoneButton>
+          </div>
+        </Modal>
 
       </div>
     </div>
