@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const { data: leaderboardData } = useQuery({ queryKey: ['leaderboard', 'top3'], queryFn: () => api.leaderboard.getTop(), refetchInterval: 60000 });
   const { data: armyLeaderboard } = useQuery({ queryKey: ['leaderboard', 'armies'], queryFn: () => api.leaderboard.armies(), refetchInterval: 60000 });
   const { data: roastsData } = useQuery({ queryKey: ['roasts', 'legendary'], queryFn: () => api.roasts.feed('viral', undefined) });
+  const { data: myBunkersData } = useQuery({ queryKey: ['bunkers', 'my'], queryFn: () => api.bunkers.my(), refetchInterval: 15000 });
 
   /* ── rank-up ── */
   useEffect(() => {
@@ -95,6 +96,7 @@ export default function DashboardPage() {
   const topRoasts = roastsData?.roasts?.slice(0, 3) || [];
   const topWarriors = leaderboardData?.leaderboard?.slice(0, 3) || [];
   const topArmies = armyLeaderboard?.armies?.slice(0, 5) || [];
+  const myBunkers = myBunkersData?.bunkers || [];
 
   const armyColor = profile?.army?.colorHex || user?.army?.colorHex || '#FF2D55';
   const armyName = profile?.army?.name || (typeof user?.army === 'string' ? user?.army : user?.army?.name) || '';
@@ -228,8 +230,8 @@ export default function DashboardPage() {
                 {([
                   { icon: '⚔️', label: 'War Room', desc: 'Join the fight', color: '#FF2D55', go: () => navigate('/live') },
                   { icon: '🔥', label: 'Roasts', desc: 'Trending burns', color: '#FF6B2C', go: () => navigate('/roasts') },
-                  { icon: '🛡️', label: 'Bunker', desc: 'Host a private watch', color: '#FFD60A', go: () => { matches.length ? setShowCreateBunker(matches[0].id) : alert('No live matches!'); } },
-                  { icon: '🔗', label: 'Join', desc: 'Enter invite code', color: '#00FF88', go: () => setShowJoinBunker(true) },
+                  { icon: '🛡️', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { matches.length ? setShowCreateBunker(matches[0].id) : alert('No live matches!'); } },
+                  { icon: '🔗', label: 'Join', desc: 'Enter Room Code', color: '#00FF88', go: () => setShowJoinBunker(true) },
                 ] as const).map((a) => (
                   <motion.button key={a.label} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} onClick={a.go}
                     className="flex flex-col items-start gap-2 p-4 md:p-5 rounded-2xl border border-white/[0.06] bg-white/[0.015] hover:bg-white/[0.04] transition-all cursor-pointer group text-left">
@@ -242,6 +244,37 @@ export default function DashboardPage() {
                 ))}
               </div>
             </motion.section>
+
+            {/* ────── MY PRIVATE WAR ROOMS ────── */}
+            {myBunkers.length > 0 && (
+              <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={section}>
+                <div className={sectionHead}>
+                  <h2 className={sectionTitle}>🛡️ My Private War Rooms</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {myBunkers.map((b: any) => (
+                    <div 
+                      key={b.id} 
+                      onClick={() => navigate(`/bunkers/${b.id}`)}
+                      className="p-4 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-wz-yellow/40 transition-all cursor-pointer flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-white font-bold text-sm mb-1">{b.name}</span>
+                        <span className="text-[10px] text-white/50 font-mono">
+                          {b.match?.homeArmy?.name} vs {b.match?.awayArmy?.name}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] bg-white/10 text-white px-2 py-0.5 rounded uppercase tracking-widest font-mono font-bold mb-1">
+                          CODE: {b.inviteCode}
+                        </span>
+                        <span className="text-[10px] text-wz-yellow font-mono">{b._count?.members || 0}/12 MEMBERS</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.section>
+            )}
 
             {/* ────── LIVE BATTLEGROUNDS ────── */}
             <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }} className={section}>
@@ -432,9 +465,9 @@ export default function DashboardPage() {
       <LevelUpModal isOpen={showLevelUp} newRank={newRank} onClose={() => setShowLevelUp(false)} />
 
       <Modal open={!!showCreateBunker} onClose={() => setShowCreateBunker('')}>
-        <h2 className="text-lg font-display font-bold text-[#FFD60A] mb-1">Create Bunker 🛡️</h2>
+        <h2 className="text-lg font-display font-bold text-[#FFD60A] mb-1">Create Private War Room 🛡️</h2>
         <p className="text-white/40 text-xs mb-4">Host a private watch room for your squad.</p>
-        <input type="text" placeholder="Bunker Name" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 mb-4 outline-none text-sm" />
+        <input type="text" placeholder="Room Name" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 mb-4 outline-none text-sm" />
         <div className="flex gap-2">
           <WarzoneButton variant="ghost" fullWidth onClick={() => setShowCreateBunker('')}>Cancel</WarzoneButton>
           <WarzoneButton fullWidth onClick={() => createBunkerMut.mutate(showCreateBunker)} disabled={bunkerName.length < 3 || createBunkerMut.isPending}>Create</WarzoneButton>
@@ -442,9 +475,9 @@ export default function DashboardPage() {
       </Modal>
 
       <Modal open={showJoinBunker} onClose={() => setShowJoinBunker(false)}>
-        <h2 className="text-lg font-display font-bold text-[#FF2D55] mb-1">Join Bunker 🔒</h2>
-        <p className="text-white/40 text-xs mb-4">Enter a 6-character code.</p>
-        <input type="text" placeholder="INVITE CODE" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} maxLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-[#FF2D55]/50 mb-4 outline-none uppercase text-sm" />
+        <h2 className="text-lg font-display font-bold text-[#FF2D55] mb-1">Join Private War Room 🔒</h2>
+        <p className="text-white/40 text-xs mb-4">Enter a 6-character room code.</p>
+        <input type="text" placeholder="ROOM CODE" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} maxLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-[#FF2D55]/50 mb-4 outline-none uppercase text-sm" />
         <div className="flex gap-2">
           <WarzoneButton variant="ghost" fullWidth onClick={() => setShowJoinBunker(false)}>Cancel</WarzoneButton>
           <WarzoneButton variant="danger" fullWidth onClick={() => joinBunkerMut.mutate()} disabled={inviteCode.length < 5 || joinBunkerMut.isPending}>Join</WarzoneButton>

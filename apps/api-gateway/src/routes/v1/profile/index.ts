@@ -140,6 +140,48 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ═══════════════════════════════════════════════
+  //  USER SEARCH  —  GET /search
+  // ═══════════════════════════════════════════════
+  fastify.get(
+    '/search',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const { q } = request.query as { q?: string };
+      
+      if (!q || q.trim() === '') {
+        return reply.send({ users: [] });
+      }
+
+      // Find users matching query. SQLite doesn't support mode: 'insensitive' on contains natively.
+      const users = await db.user.findMany({
+        where: {
+          username: { contains: q },
+          id: { not: request.user.id },
+        },
+        include: {
+          army: true,
+        },
+        take: 10,
+      });
+
+      const results = users.map((u) => {
+        const rankInfo = getRankInfo(u.totalWarPoints);
+        return {
+          id: u.id,
+          username: u.username,
+          army: u.army?.name || 'Recruit',
+          armyColor: u.army?.colorHex || '#FFFFFF',
+          rank: rankInfo.shortCode || rankInfo.rank,
+          wins: 0, // Mock stats for now, until duels history tracking is fully added
+          losses: 0,
+        };
+      });
+
+      return reply.send({ users: results });
+    }
+  );
+
+  // ═══════════════════════════════════════════════
   //  PUBLIC PROFILE  —  GET /:username
   // ═══════════════════════════════════════════════
   fastify.get(
@@ -304,7 +346,7 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
 
       const ext = path.extname(data.filename) || '.png';
       const fileName = `${request.user.id}-${randomUUID()}${ext}`;
-      const uploadPath = path.join(__dirname, '..', '..', '..', 'public', 'uploads', fileName);
+      const uploadPath = path.join(__dirname, '..', '..', '..', '..', 'public', 'uploads', fileName);
 
       await pipeline(data.file, fs.createWriteStream(uploadPath));
 

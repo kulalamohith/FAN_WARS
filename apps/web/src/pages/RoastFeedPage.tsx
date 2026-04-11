@@ -7,6 +7,7 @@ import GlassCard from '../components/ui/GlassCard';
 import WarzoneButton from '../components/ui/WarzoneButton';
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import QuickProfileModal, { QuickProfileUser } from '../components/ui/QuickProfileModal';
 
 export default function RoastFeedPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function RoastFeedPage({ embedded = false }: { embedded?: boolean
 
   const [sort, setSort] = useState<'viral' | 'new'>('viral');
   const [showCompose, setShowCompose] = useState(false);
+  const [profileUser, setProfileUser] = useState<QuickProfileUser | null>(null);
 
   const { data: armiesData } = useQuery({
     queryKey: ['armies'],
@@ -123,7 +125,12 @@ export default function RoastFeedPage({ embedded = false }: { embedded?: boolean
                   >
                     {roast.author.username[0].toUpperCase()}
                   </div>
-                  <span className="text-white/80 text-sm font-bold font-mono">{roast.author.username}</span>
+                  <button
+                    onClick={() => setProfileUser({ id: roast.author.id, username: roast.author.username, rank: roast.author.rank || 'RECRUIT', armyName: roast.author.army?.name || 'N/A', armyColor: roast.author.army?.colorHex })}
+                    className="text-white/80 text-sm font-bold font-mono hover:underline cursor-pointer"
+                  >
+                    {roast.author.username}
+                  </button>
                   <span className="text-white/20 text-xs">→</span>
                   <span
                     className="text-xs font-bold px-2 py-0.5 rounded-full border"
@@ -201,6 +208,10 @@ export default function RoastFeedPage({ embedded = false }: { embedded?: boolean
             />
           )}
         </AnimatePresence>
+
+        {profileUser && (
+          <QuickProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
+        )}
       </>
     );
   }

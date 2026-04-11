@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { api } from '../lib/api';
 import {
   DUEL_TOPICS,
   SIMULATED_RESPONSES,
@@ -49,6 +50,13 @@ export interface Duel {
   player2Reactions: DuelReactions;
   winner: string | null;        // winner player id
   myReactions: { player1: string | null; player2: string | null }; // current user's reactions
+  isReal?: boolean;
+  // ── New: Vote + Hype system ──
+  player1Votes: number;
+  player2Votes: number;
+  myVote: 'player1' | 'player2' | null;
+  hypeCount: number;
+  myHype: boolean;
 }
 
 interface DuelState {
@@ -71,11 +79,15 @@ interface DuelState {
   sendMessage: (text: string) => void;
   endDuel: () => void;
   reactToDuel: (duelId: string, player: 'player1' | 'player2', reaction: string) => void;
+  voteDuel: (duelId: string, player: 'player1' | 'player2') => void;
+  hypeDuel: (duelId: string) => void;
   viewDuel: (duelId: string) => void;
   closeViewDuel: () => void;
   closeDuelRoom: () => void;
   setDuelView: (view: 'lobby' | 'room' | 'reading') => void;
   initPublicDuels: (currentUser: DuelPlayer) => void;
+  startRealDuel: (payload: { duelId: string; opponentId: string; opponentName: string; topicText: string }, currentUser: DuelPlayer) => void;
+  addMessage: (msg: DuelMessage) => void;
 }
 
 // ── Helpers ──
@@ -118,6 +130,7 @@ function generateSampleDuels(currentUser: DuelPlayer): Duel[] {
       player2Reactions: { fire: 89, brutal: 41, facts: 102, toxic: 12, ltake: 8 },
       winner: null,
       myReactions: { player1: null, player2: null },
+      player1Votes: 134, player2Votes: 218, myVote: null, hypeCount: 87, myHype: false,
     },
     {
       id: 'sample-2',
@@ -143,6 +156,7 @@ function generateSampleDuels(currentUser: DuelPlayer): Duel[] {
       player2Reactions: { fire: 92, brutal: 30, facts: 38, toxic: 45, ltake: 28 },
       winner: null,
       myReactions: { player1: null, player2: null },
+      player1Votes: 98, player2Votes: 145, myVote: null, hypeCount: 210, myHype: false,
     },
     {
       id: 'sample-3',
@@ -167,6 +181,7 @@ function generateSampleDuels(currentUser: DuelPlayer): Duel[] {
       player2Reactions: { fire: 95, brutal: 70, facts: 88, toxic: 22, ltake: 18 },
       winner: 'sim5', // OrangeArmy_SRH won
       myReactions: { player1: null, player2: null },
+      player1Votes: 230, player2Votes: 173, myVote: null, hypeCount: 156, myHype: false,
     },
   ];
 
@@ -207,6 +222,7 @@ export const useDuelStore = create<DuelState>((set, get) => ({
       player2Reactions: { ...EMPTY_REACTIONS },
       winner: null,
       myReactions: { player1: null, player2: null },
+      player1Votes: 0, player2Votes: 0, myVote: null, hypeCount: 0, myHype: false,
     };
 
     // Start opponent simulation with a shared index tracker
@@ -250,6 +266,43 @@ export const useDuelStore = create<DuelState>((set, get) => ({
     });
   },
 
+  startRealDuel: (payload, currentUser) => {
+    const duel: Duel = {
+      id: payload.duelId,
+      topic: { id: 'custom', title: 'Contextual Clash', text: payload.topicText, category: 'hot-take' },
+      player1: currentUser,
+      player2: { id: payload.opponentId, username: payload.opponentName, army: 'Rival', armyColor: '#FFD60A' },
+      messages: [],
+      status: 'live',
+      startedAt: Date.now(),
+      endedAt: null,
+      verdictAt: null,
+      player1Reactions: { ...EMPTY_REACTIONS },
+      player2Reactions: { ...EMPTY_REACTIONS },
+      winner: null,
+      myReactions: { player1: null, player2: null },
+      isReal: true,
+      player1Votes: 0, player2Votes: 0, myVote: null, hypeCount: 0, myHype: false,
+    };
+
+    set({
+      activeDuel: duel,
+      duelView: 'room',
+      _opponentTimer: null,
+      _opponentMsgIndex: 0,
+    });
+  },
+
+  addMessage: (msg: DuelMessage) => {
+    set((s) => {
+      // Prevent duplicates from local optimistic update if needed, but we'll do both or rely on id
+      if (s.activeDuel && s.activeDuel.status === 'live' && !s.activeDuel.messages.find(m => m.id === msg.id)) {
+        return { activeDuel: { ...s.activeDuel, messages: [...s.activeDuel.messages, msg] } };
+      }
+      return s;
+    });
+  },
+
   sendMessage: (text: string) => {
     const state = get();
     if (!state.activeDuel || state.activeDuel.status !== 'live') return;
@@ -266,6 +319,16 @@ export const useDuelStore = create<DuelState>((set, get) => ({
         messages: [...s.activeDuel.messages, msg],
       } : null,
     }));
+
+    if (state.activeDuel.isReal) {
+      import('./globalSocketStore').then(m => {
+        m.useGlobalSocketStore.getState().socket?.emit('send_duel_message', {
+          duelId: state.activeDuel!.id,
+          ...msg
+        });
+      });
+      return;
+    }
 
     // Trigger opponent response 3-7s after user sends a message
     const opponent = state.activeDuel.player2;
@@ -306,9 +369,13 @@ export const useDuelStore = create<DuelState>((set, get) => ({
       status: 'voting',
       endedAt: now,
       verdictAt: now + oneDay,
-      // Seed with some initial reactions
-      player1Reactions: { fire: Math.floor(Math.random() * 10), brutal: Math.floor(Math.random() * 5), facts: Math.floor(Math.random() * 15), toxic: Math.floor(Math.random() * 3), ltake: Math.floor(Math.random() * 3) },
-      player2Reactions: { fire: Math.floor(Math.random() * 10), brutal: Math.floor(Math.random() * 5), facts: Math.floor(Math.random() * 15), toxic: Math.floor(Math.random() * 3), ltake: Math.floor(Math.random() * 3) },
+      player1Reactions: { ...EMPTY_REACTIONS },
+      player2Reactions: { ...EMPTY_REACTIONS },
+      player1Votes: 0,
+      player2Votes: 0,
+      myVote: null,
+      hypeCount: 0,
+      myHype: false,
     };
 
     set((s) => ({
@@ -319,6 +386,17 @@ export const useDuelStore = create<DuelState>((set, get) => ({
       _opponentTimer: null,
       stats: { ...s.stats, totalDuels: s.stats.totalDuels + 1, points: s.stats.points + 100 },
     }));
+
+    // Save to backend for global visibility (backend deduplicates if both users try)
+    api.duels.save({
+      topicText: completedDuel.topic.text,
+      topicCategory: completedDuel.topic.category,
+      player1: completedDuel.player1,
+      player2: completedDuel.player2,
+      messages: completedDuel.messages,
+      startedAt: completedDuel.startedAt || undefined,
+      endedAt: now,
+    }).catch((err) => console.error('Failed to save duel:', err));
   },
 
   reactToDuel: (duelId: string, player: 'player1' | 'player2', reaction: string) => {
@@ -379,4 +457,43 @@ export const useDuelStore = create<DuelState>((set, get) => ({
   },
 
   setDuelView: (view) => set({ duelView: view }),
+
+  voteDuel: (duelId: string, player: 'player1' | 'player2') => {
+    const updateDuel = (duel: Duel): Duel => {
+      if (duel.id !== duelId) return duel;
+      const prev = duel.myVote;
+      // Undo previous vote
+      let p1 = duel.player1Votes;
+      let p2 = duel.player2Votes;
+      if (prev === 'player1') p1 = Math.max(0, p1 - 1);
+      if (prev === 'player2') p2 = Math.max(0, p2 - 1);
+      // Toggle off if same
+      if (prev === player) {
+        return { ...duel, player1Votes: p1, player2Votes: p2, myVote: null };
+      }
+      // Add new vote
+      if (player === 'player1') p1 += 1; else p2 += 1;
+      return { ...duel, player1Votes: p1, player2Votes: p2, myVote: player };
+    };
+    set((s) => ({
+      publicDuels: s.publicDuels.map(updateDuel),
+      myDuels: s.myDuels.map(updateDuel),
+      viewingDuel: s.viewingDuel ? updateDuel(s.viewingDuel) : null,
+    }));
+  },
+
+  hypeDuel: (duelId: string) => {
+    const updateDuel = (duel: Duel): Duel => {
+      if (duel.id !== duelId) return duel;
+      if (duel.myHype) {
+        return { ...duel, hypeCount: Math.max(0, duel.hypeCount - 1), myHype: false };
+      }
+      return { ...duel, hypeCount: duel.hypeCount + 1, myHype: true };
+    };
+    set((s) => ({
+      publicDuels: s.publicDuels.map(updateDuel),
+      myDuels: s.myDuels.map(updateDuel),
+      viewingDuel: s.viewingDuel ? updateDuel(s.viewingDuel) : null,
+    }));
+  },
 }));

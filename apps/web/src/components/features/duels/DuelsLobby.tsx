@@ -1,6 +1,7 @@
 /**
  * WARZONE — Duels Lobby
- * Main hub for Sniper Duels: start duels, view active/public duels, stats, and history.
+ * Personal hub for Sniper Duels: start duels, view your active & completed duels.
+ * Public/live duels from all users are now shown in the Posts > Debate tab.
  */
 
 import { useState, useEffect } from 'react';
@@ -11,14 +12,13 @@ import DuelPostCard from './DuelPostCard';
 import { useDuelStore } from '../../../stores/duelStore';
 import { useAuthStore } from '../../../stores/authStore';
 
-type FeedTab = 'public' | 'my' | 'history';
+type FeedTab = 'live' | 'my';
 
 export default function DuelsLobby() {
   const [showInvite, setShowInvite] = useState(false);
-  const [feedTab, setFeedTab] = useState<FeedTab>('public');
+  const [feedTab, setFeedTab] = useState<FeedTab>('live');
 
   const user = useAuthStore((s) => s.user);
-  const publicDuels = useDuelStore((s) => s.publicDuels);
   const myDuels = useDuelStore((s) => s.myDuels);
   const stats = useDuelStore((s) => s.stats);
   const initPublicDuels = useDuelStore((s) => s.initPublicDuels);
@@ -35,22 +35,19 @@ export default function DuelsLobby() {
     }
   }, [user, initPublicDuels]);
 
+  // User's active (live/voting) duels
+  const activeDuels = myDuels.filter((d) => d.status === 'live' || d.status === 'voting');
+  // User's completed duels (history)
   const completedDuels = myDuels.filter((d) => d.status === 'completed');
-  const activeDuels = myDuels.filter((d) => d.status === 'voting');
 
   const winRate = stats.totalDuels > 0 ? Math.round((stats.wins / stats.totalDuels) * 100) : 0;
 
   const feedTabs: { id: FeedTab; label: string; count: number }[] = [
-    { id: 'public', label: '🔥 LIVE DUELS', count: publicDuels.filter((d) => d.status === 'voting').length },
-    { id: 'my', label: '⚔️ MY DUELS', count: activeDuels.length },
-    { id: 'history', label: '📜 HISTORY', count: completedDuels.length },
+    { id: 'live', label: '🎯 LIVE DUEL', count: activeDuels.length },
+    { id: 'my', label: '📜 MY DUELS', count: completedDuels.length },
   ];
 
-  const displayDuels = feedTab === 'public'
-    ? publicDuels
-    : feedTab === 'my'
-    ? myDuels
-    : completedDuels;
+  const displayDuels = feedTab === 'live' ? activeDuels : completedDuels;
 
   return (
     <>
@@ -132,7 +129,7 @@ export default function DuelsLobby() {
         ))}
       </motion.div>
 
-      {/* ── Feed Tabs ── */}
+      {/* ── Feed Tabs (Live Duel / My Duels only) ── */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -179,22 +176,20 @@ export default function DuelsLobby() {
                 transition={{ repeat: Infinity, duration: 3 }}
                 className="text-3xl mb-3"
               >
-                {feedTab === 'public' ? '⚔️' : feedTab === 'my' ? '🎯' : '📜'}
+                {feedTab === 'live' ? '🎯' : '📜'}
               </motion.p>
               <p className="text-white/30 text-sm font-display font-bold mb-1">
-                {feedTab === 'public' && 'No duels happening yet'}
-                {feedTab === 'my' && 'No active duels'}
-                {feedTab === 'history' && 'No completed duels'}
+                {feedTab === 'live' && 'No active duels'}
+                {feedTab === 'my' && 'No completed duels'}
               </p>
               <p className="text-white/15 text-[10px] font-mono">
-                {feedTab === 'public' && 'Be the first to start one!'}
-                {feedTab === 'my' && 'Challenge someone to get started'}
-                {feedTab === 'history' && 'Your battle history will appear here'}
+                {feedTab === 'live' && 'Challenge someone to get started'}
+                {feedTab === 'my' && 'Your battle history will appear here'}
               </p>
             </div>
           ) : (
             displayDuels.map((duel) => (
-              <DuelPostCard key={duel.id} duel={duel} compact={feedTab === 'history'} />
+              <DuelPostCard key={duel.id} duel={duel} compact={feedTab === 'my'} />
             ))
           )}
         </motion.div>
@@ -214,7 +209,7 @@ export default function DuelsLobby() {
               { icon: '🎯', title: 'Challenge', desc: 'Pick an opponent and a debate topic' },
               { icon: '⚔️', title: '5-Min Battle', desc: 'Go head-to-head in a live banter debate' },
               { icon: '📢', title: 'Goes Public', desc: 'Your duel becomes a post everyone can read' },
-              { icon: '🗳️', title: 'Community Reacts', desc: 'People react with ✅ FACTS 🔥 FIRE 💀 BRUTAL 🤡 TOXIC 😤 L TAKE' },
+              { icon: '🗳️', title: 'Community Reacts', desc: 'People react with ☢️ TOXIC 🤡 CLOWN 🔥 FIRE 😂 LAUGH' },
               { icon: '🏆', title: '24h Verdict', desc: 'Most positive reactions wins! +200 pts for the winner' },
             ].map((step, i) => (
               <div key={i} className="flex items-start gap-3">

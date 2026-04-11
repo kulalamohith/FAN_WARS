@@ -1,12 +1,13 @@
 /**
  * WARZONE — Duel Post Card
- * Shows a completed/voting duel as a public card with reactions.
- * This is how duels appear in the feed and lobby.
+ * Shows a completed/voting duel as a card with VOTE counts + HYPE.
  */
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { REACTION_CONFIG, getReactionScore, getTotalReactions, type DuelReactions } from '../../../lib/duelTopics';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDuelStore, type Duel } from '../../../stores/duelStore';
+import { api } from '../../../lib/api';
 
 interface Props {
   duel: Duel;
@@ -14,16 +15,35 @@ interface Props {
 }
 
 export default function DuelPostCard({ duel, compact = false }: Props) {
-  const viewDuel = useDuelStore((s) => s.viewDuel);
-  const reactToDuel = useDuelStore((s) => s.reactToDuel);
+  const setDuelView = useDuelStore((s) => s.setDuelView);
+  const queryClient = useQueryClient();
+  const [localHype, setLocalHype] = useState(duel.hypeCount);
+  const [localMyHype, setLocalMyHype] = useState(duel.myHype);
 
-  const { player1, player2, topic, status, messages, player1Reactions, player2Reactions, winner, verdictAt, myReactions } = duel;
+  const hypeMutation = useMutation({
+    mutationFn: () => api.duels.hype(duel.id),
+    onMutate: () => {
+      if (localMyHype) {
+        setLocalHype((h) => Math.max(0, h - 1));
+        setLocalMyHype(false);
+      } else {
+        setLocalHype((h) => h + 1);
+        setLocalMyHype(true);
+      }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['duels'] }),
+  });
 
-  const p1Score = getReactionScore(player1Reactions);
-  const p2Score = getReactionScore(player2Reactions);
-  const totalP1 = getTotalReactions(player1Reactions);
-  const totalP2 = getTotalReactions(player2Reactions);
-  const totalAll = totalP1 + totalP2 || 1;
+  function handleView() {
+    // Set viewingDuel directly in store (works for API-fetched duels)
+    useDuelStore.setState({ viewingDuel: duel, duelView: 'reading' });
+  }
+
+  const { player1, player2, topic, status, messages, player1Votes, player2Votes, hypeCount, myHype, verdictAt, winner } = duel;
+
+  const totalVotes = player1Votes + player2Votes || 1;
+  const p1Pct = Math.round((player1Votes / totalVotes) * 100);
+  const p2Pct = 100 - p1Pct;
 
   // Time remaining for verdict
   const now = Date.now();
@@ -34,8 +54,8 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
   const isVoting = status === 'voting' && timeRemaining > 0;
   const isCompleted = status === 'completed' || (status === 'voting' && timeRemaining <= 0);
 
-  // Determine winner by reactions if voting ended
-  const effectiveWinner = winner || (isCompleted ? (p1Score >= p2Score ? player1.id : player2.id) : null);
+  // Determine winner by votes
+  const effectiveWinner = winner || (isCompleted ? (player1Votes >= player2Votes ? player1.id : player2.id) : null);
   const winnerName = effectiveWinner === player1.id ? player1.username : effectiveWinner === player2.id ? player2.username : null;
 
   // Preview: first message from each player
@@ -47,7 +67,7 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      onClick={() => viewDuel(duel.id)}
+      onClick={handleView}
       className="rounded-2xl border border-white/[0.06] bg-white/[0.015] hover:bg-white/[0.025] hover:border-white/[0.12] transition-all cursor-pointer overflow-hidden group"
     >
       {/* Top accent */}
@@ -106,22 +126,28 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
           </div>
         </div>
 
-        {/* Tug of war bar */}
-        <div className="flex h-2 rounded-full overflow-hidden bg-white/[0.04] mb-3">
+        {/* Vote bar */}
+        <div className="flex h-2 rounded-full overflow-hidden bg-white/[0.04] mb-1">
           <motion.div
             initial={{ width: '50%' }}
-            animate={{ width: `${Math.max(15, (totalP1 / totalAll) * 100)}%` }}
+            animate={{ width: `${Math.max(15, p1Pct)}%` }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="h-full rounded-l-full"
             style={{ background: player1.armyColor }}
           />
           <motion.div
             initial={{ width: '50%' }}
-            animate={{ width: `${Math.max(15, (totalP2 / totalAll) * 100)}%` }}
+            animate={{ width: `${Math.max(15, p2Pct)}%` }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="h-full rounded-r-full"
             style={{ background: player2.armyColor }}
           />
+        </div>
+        {/* Vote counts */}
+        <div className="flex justify-between mb-3">
+          <span className="text-[9px] font-mono font-bold" style={{ color: player1.armyColor }}>{player1Votes} votes</span>
+          <span className="text-[8px] font-mono text-white/20">{player1Votes + player2Votes} total</span>
+          <span className="text-[9px] font-mono font-bold" style={{ color: player2.armyColor }}>{player2Votes} votes</span>
         </div>
 
         {/* Preview messages */}
@@ -142,21 +168,19 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
           </div>
         )}
 
-        {/* Reactions strip */}
+        {/* Footer: Hype + Read debate */}
         <div className="flex items-center gap-4 pt-3 border-t border-white/[0.04]">
-          <div className="flex-1 flex items-center gap-1.5">
-            {REACTION_CONFIG.map((r) => {
-              const p1Count = player1Reactions[r.key];
-              const p2Count = player2Reactions[r.key];
-              const total = p1Count + p2Count;
-              if (total === 0 && compact) return null;
-              return (
-                <span key={r.key} className="text-[10px] font-mono text-white/25" title={`${r.label}: ${total}`}>
-                  {r.emoji} {total > 0 ? total : ''}
-                </span>
-              );
-            })}
-          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); hypeMutation.mutate(); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-mono font-bold transition-all ${
+              localMyHype
+                ? 'bg-[#FF6B2C]/15 border-[#FF6B2C]/30 text-[#FF6B2C]'
+                : 'bg-white/[0.02] border-white/[0.06] text-white/25 hover:bg-white/[0.05] hover:text-white/40'
+            }`}
+          >
+            🔥 HYPE {localHype > 0 && <span>{localHype}</span>}
+          </button>
+          <span className="flex-1" />
           <span className="text-[10px] font-mono text-[#FF6B2C]/50 group-hover:text-[#FF6B2C] transition-colors shrink-0">
             Read debate →
           </span>

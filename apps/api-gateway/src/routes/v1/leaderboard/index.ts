@@ -109,4 +109,123 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+
+  // --- GET Badges List (/v1/leaderboard/badges-list) ---
+  fastify.get('/badges-list', async (request, reply) => {
+    // Get all badges except 'Die-Hard Loyalist' per the UI logic in ProfilePage
+    const badges = await db.badge.findMany({
+      where: {
+        name: { not: 'Die-Hard Loyalist' }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    return reply.send({ success: true, badges });
+  });
+
+  // --- GET Badge Leaderboard (/v1/leaderboard/badges/:key) ---
+  // If user is authenticated, use verifyJWT passively or just check JWT if available
+  // Fastify route handler doesn't enforce JWT, but we can verify it if authorization header exists
+  fastify.get('/badges/:key', async (request, reply) => {
+    const { key } = request.params as { key: string };
+    
+    // Find the badge
+    const badge = await db.badge.findUnique({ where: { key } });
+    if (!badge) return reply.notFound('Badge not found');
+
+    // Fetch top 9 users for this badge who have progress > 0
+    const topUserBadges = await db.userBadge.findMany({
+      where: { badgeId: badge.id, progress: { gt: 0 } },
+      take: 9,
+      orderBy: [
+        { progress: 'desc' },
+        { earnedAt: 'asc' }
+      ],
+      include: {
+        user: {
+          include: { army: true }
+        }
+      }
+    });
+
+    const mapToDTO = (ub: any, rankShift: number) => ({
+      id: ub.user.id,
+      username: ub.user.username,
+      profilePictureUrl: ub.user.profilePictureUrl,
+      totalWarPoints: ub.user.totalWarPoints.toString(),
+      militaryRank: calculateRank(ub.user.totalWarPoints),
+      army: { id: ub.user.army.id, name: ub.user.army.name, colorHex: ub.user.army.colorHex },
+      rankPosition: rankShift,
+      badgeProgress: ub.progress,
+      badgeTier: ub.tier
+    });
+
+    const top9 = topUserBadges.map((ub, i) => mapToDTO(ub, i + 1));
+
+    // Resolve Authorization header if present to get current user context
+    let currentUser = null;
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = fastify.jwt.verify(token) as { id: string };
+        const userId = decoded.id;
+
+        const myUserBadge = await db.userBadge.findUnique({
+          where: { userId_badgeId: { userId, badgeId: badge.id } },
+          include: { user: { include: { army: true } } }
+        });
+
+        if (myUserBadge && myUserBadge.progress > 0) {
+          // Count how many users have more progress, or same progress but earned earlier
+          const myRankIndex = await db.userBadge.count({
+            where: {
+              badgeId: badge.id,
+              progress: { gt: 0 },
+              OR: [
+                { progress: { gt: myUserBadge.progress } },
+                {
+                  progress: myUserBadge.progress,
+                  earnedAt: { lt: myUserBadge.earnedAt }
+                }
+              ]
+            }
+          });
+          currentUser = mapToDTO(myUserBadge, myRankIndex + 1);
+        } else if (userId) { // fallback context if user exists but has 0 progress
+          const myUser = await db.user.findUnique({
+            where: { id: userId },
+            include: { army: true }
+          });
+          if (myUser) {
+             currentUser = {
+               id: myUser.id,
+               username: myUser.username,
+               profilePictureUrl: myUser.profilePictureUrl,
+               totalWarPoints: myUser.totalWarPoints.toString(),
+               militaryRank: calculateRank(myUser.totalWarPoints),
+               army: { id: myUser.army?.id, name: myUser.army?.name, colorHex: myUser.army?.colorHex },
+               rankPosition: '-', // No rank
+               badgeProgress: 0,
+               badgeTier: 'NONE'
+             };
+          }
+        }
+      } catch (err) {
+        // invalid token, ignore
+      }
+    }
+
+    return reply.send({
+      success: true,
+      badge: {
+        id: badge.id,
+        key: badge.key,
+        name: badge.name,
+        icon: badge.icon,
+        maxProgress: badge.maxProgress
+      },
+      top9,
+      currentUser
+    });
+  });
 };

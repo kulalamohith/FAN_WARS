@@ -39,6 +39,8 @@ interface WarRoomState {
   bunkerMessages: ChatMessage[];
   pendingBunkerId: string | null;
   activeAdminEvent: { type: string; data: any } | null;
+  isBunkerEnded: boolean;
+  kickedUserId: string | null;
   
   // Actions
   connect: (matchId: string) => void;
@@ -67,6 +69,8 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   bunkerMessages: [],
   pendingBunkerId: null,
   activeAdminEvent: null,
+  isBunkerEnded: false,
+  kickedUserId: null,
 
   connect: (matchId: string) => {
     // Prevent multiple connections
@@ -142,6 +146,14 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       });
     });
 
+    socket.on('bunker_kicked', (data: { userId: string }) => {
+      set({ kickedUserId: data.userId });
+    });
+
+    socket.on('bunker_ended', (data: { bunkerId: string }) => {
+      set({ isBunkerEnded: true });
+    });
+
     set({ socket });
   },
 
@@ -206,5 +218,15 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     set({ activeAdminEvent: null });
   },
 
-  reset: () => set({ messages: [], bunkerMessages: [], toxicityHome: 50, toxicityAway: 50, activePredictions: [], liveReactions: [], activeAdminEvent: null })
+  reset: () => set({ 
+    messages: [], 
+    bunkerMessages: [], 
+    toxicityHome: 50, 
+    toxicityAway: 50, 
+    activePredictions: [], 
+    liveReactions: [], 
+    activeAdminEvent: null,
+    isBunkerEnded: false,
+    kickedUserId: null
+  })
 }));

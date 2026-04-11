@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 import GlassCard from '../components/ui/GlassCard';
 import DuelsLobby from '../components/features/duels/DuelsLobby';
-import DuelRoom from '../components/features/duels/DuelRoom';
 import DuelReadView from '../components/features/duels/DuelReadView';
 import { useDuelStore } from '../stores/duelStore';
 
@@ -19,11 +18,6 @@ export default function PollsPage() {
   const duelView = useDuelStore((s) => s.duelView);
   const activeDuel = useDuelStore((s) => s.activeDuel);
   const viewingDuel = useDuelStore((s) => s.viewingDuel);
-
-  // If in active duel room or reading a duel, render those full-screen
-  if (duelView === 'room' && activeDuel) {
-    return <DuelRoom />;
-  }
 
   if (duelView === 'reading' && viewingDuel) {
     return <DuelReadView />;

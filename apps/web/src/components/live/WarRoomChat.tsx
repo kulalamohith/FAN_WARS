@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '../../stores/warRoomStore';
+import QuickProfileModal, { QuickProfileUser } from '../ui/QuickProfileModal';
 
 interface WarRoomChatProps {
   messages: ChatMessage[];
@@ -38,6 +39,8 @@ export default function WarRoomChat({
 }: WarRoomChatProps) {
   const [tab, setTab] = useState<'global' | 'bunker'>('global');
   const [reactionBurst, setReactionBurst] = useState<{ id: number; emoji: string; x: number }[]>([]);
+  const [profileUser, setProfileUser] = useState<QuickProfileUser | null>(null);
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
   const burstId = useRef(0);
 
@@ -135,9 +138,13 @@ export default function WarRoomChat({
                 >
                   <div className="flex items-center gap-2">
                     {isVip && <span className="text-[8px] font-mono text-wz-yellow font-black">⭐ VIP</span>}
-                    <span className="font-bold font-mono text-[11px]" style={{ color: accentColor }}>
+                    <button
+                      onClick={() => setProfileUser({ id: msg.userId, username: msg.username, rank: msg.rank || 'RECRUIT', armyName: msg.armyId || 'N/A' })}
+                      className="font-bold font-mono text-[11px] hover:underline cursor-pointer"
+                      style={{ color: accentColor }}
+                    >
                       {msg.username}
-                    </span>
+                    </button>
                     {isMe && <span className="text-[8px] font-mono text-white/20">YOU</span>}
                   </div>
                   <span className="text-white/80 text-xs leading-relaxed">{msg.text}</span>
@@ -188,6 +195,10 @@ export default function WarRoomChat({
           </motion.button>
         </div>
       </div>
+
+      {profileUser && (
+        <QuickProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
+      )}
     </div>
   );
 }

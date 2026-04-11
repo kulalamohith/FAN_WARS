@@ -32,6 +32,7 @@ import { bunkersRoutes } from './routes/v1/bunkers';
 import { postsRoutes } from './routes/v1/posts';
 import { profileRoutes } from './routes/v1/profile';
 import { adminRoutes } from './routes/v1/admin';
+import { duelsRoutes } from './routes/v1/duels';
 
 /**
  * Builds a fully configured Fastify instance.
@@ -96,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     api.register(postsRoutes, { prefix: '/posts' });
     api.register(profileRoutes, { prefix: '/profile' });
     api.register(adminRoutes, { prefix: '/admin' });
+    api.register(duelsRoutes, { prefix: '/duels' });
   }, { prefix: '/api/v1' });
 
   // --- Health check route (always available, no auth) ---

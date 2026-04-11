@@ -12,11 +12,12 @@ export default function LeaderboardPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [searchParams, setSearchParams] = useSearchParams();
-  const defaultTab = (searchParams.get('view') as 'warriors' | 'armies' | 'team') || 'warriors';
-  const [tab, setTab] = useState<'warriors' | 'armies' | 'team'>(defaultTab);
+  const defaultTab = (searchParams.get('view') as 'warriors' | 'armies' | 'team' | 'badges') || 'warriors';
+  const [tab, setTab] = useState<'warriors' | 'armies' | 'team' | 'badges'>(defaultTab);
+  const [activeBadgeKey, setActiveBadgeKey] = useState<string | null>(null);
 
   // Update URL purely visually when tab changes
-  const handleTabChange = (t: 'warriors' | 'armies' | 'team') => {
+  const handleTabChange = (t: 'warriors' | 'armies' | 'team' | 'badges') => {
     setTab(t);
     setSearchParams({ view: t });
   };
@@ -37,6 +38,25 @@ export default function LeaderboardPage() {
     queryKey: ['leaderboard', 'team-context'],
     queryFn: () => api.leaderboard.teamContext(),
     enabled: tab === 'team',
+    refetchInterval: 30000,
+  });
+
+  const { data: badgesListData } = useQuery({
+    queryKey: ['leaderboard', 'badges-list'],
+    queryFn: () => api.leaderboard.badgesList(),
+    enabled: tab === 'badges',
+  });
+
+  const badgesList = badgesListData?.badges || [];
+
+  if (tab === 'badges' && badgesList.length > 0 && !activeBadgeKey) {
+    setActiveBadgeKey(badgesList[0].key);
+  }
+
+  const { data: badgeData, isLoading: badgeLoading } = useQuery({
+    queryKey: ['leaderboard', 'badges', activeBadgeKey],
+    queryFn: () => api.leaderboard.badgeLeaderboard(activeBadgeKey!),
+    enabled: tab === 'badges' && !!activeBadgeKey,
     refetchInterval: 30000,
   });
 
@@ -81,6 +101,12 @@ export default function LeaderboardPage() {
             className={`flex-1 py-2.5 rounded-lg text-sm font-bold font-mono transition-all ${tab === 'armies' ? 'bg-wz-red text-white shadow-[0_0_20px_rgba(255,45,85,0.3)]' : 'bg-white/5 text-wz-muted'}`}
           >
             🛡️ Armies
+          </button>
+          <button
+            onClick={() => handleTabChange('badges')}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-bold font-mono transition-all ${tab === 'badges' ? 'bg-[#FFD700] text-black shadow-[0_0_20px_rgba(255,215,0,0.3)]' : 'bg-white/5 text-wz-muted'}`}
+          >
+            🎖️ Medals
           </button>
         </div>
 
@@ -376,6 +402,160 @@ export default function LeaderboardPage() {
                     </div>
                   </motion.div>
                 )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* === Badges (Medals) Tab === */}
+        {tab === 'badges' && (
+          <>
+            <div className="text-center mb-4">
+              <p className="text-wz-muted text-xs font-mono mb-1">MEDAL RANKINGS</p>
+              <p className="text-wz-white/80 text-sm">Top warriors across 9 different combat disciplines.</p>
+            </div>
+
+            {/* Sub-navigation for the 9 badges */}
+            <div className="flex overflow-x-auto no-scrollbar gap-2 mb-6 pb-2">
+              {badgesList.map((b: any) => (
+                <button
+                  key={b.key}
+                  onClick={() => setActiveBadgeKey(b.key)}
+                  className={`flex-shrink-0 px-3 py-2 rounded-xl border flex items-center gap-2 transition-all ${
+                    activeBadgeKey === b.key
+                      ? 'border-[#FFD700] bg-[#FFD700]/10 text-white shadow-[0_0_15px_rgba(255,215,0,0.15)]'
+                      : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  <span className="text-lg">{b.icon}</span>
+                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase truncate max-w-[100px]">
+                    {b.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {badgeLoading && (
+              <div className="space-y-3">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="glass-card h-16 animate-pulse border-wz-border/10" />
+                ))}
+              </div>
+            )}
+
+            {badgeData?.top9 && badgeData.badge && (
+              <div className="space-y-3">
+                {/* TOP 9 LIST */}
+                {badgeData.top9.map((warrior: any, i: number) => {
+                  const isCurrentUser = warrior.id === user?.id;
+                  
+                  const rankStyles = 
+                    i === 0 ? 'border-[#FFD700]/50 bg-[#FFD700]/5' :
+                    i === 1 ? 'border-[#C0C0C0]/50 bg-[#C0C0C0]/5' :
+                    i === 2 ? 'border-[#CD7F32]/50 bg-[#CD7F32]/5' :
+                    isCurrentUser ? 'border-[#007AFF]/40 bg-[#007AFF]/10 shadow-[0_0_15px_rgba(0,122,255,0.1)]' :
+                    'border-wz-border/10 hover:border-wz-border/30';
+
+                  const numberColor = 
+                    i === 0 ? 'text-[#FFD700] drop-shadow-[0_0_5px_rgba(255,215,0,0.8)]' :
+                    i === 1 ? 'text-[#C0C0C0]' :
+                    i === 2 ? 'text-[#CD7F32]' :
+                    'text-wz-white/30';
+
+                  return (
+                    <motion.div
+                      key={warrior.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05, ease: "easeOut" }}
+                    >
+                       <div className={`glass-card p-4 flex items-center gap-4 transition-colors ${rankStyles}`}>
+                        <div className="w-8 flex justify-center">
+                          <span className={`font-display font-black text-xl italic ${numberColor}`}>
+                            {warrior.rankPosition}
+                          </span>
+                        </div>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black overflow-hidden border border-white/10">
+                           {warrior.profilePictureUrl ? (
+                             <img src={warrior.profilePictureUrl} alt={warrior.username} className="w-full h-full object-cover" />
+                           ) : (
+                             <span className="text-white/50 text-xs font-display font-black">{warrior.username[0]}</span>
+                           )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className={`font-mono font-bold truncate ${isCurrentUser ? 'text-[#007AFF]' : 'text-wz-white'}`}>
+                              {warrior.username}
+                            </p>
+                            {isCurrentUser && (
+                              <span className="text-[9px] uppercase tracking-widest text-[#007AFF] bg-[#007AFF]/20 px-1.5 rounded">You</span>
+                            )}
+                          </div>
+                          <RankBadge rank={warrior.militaryRank} size="sm" />
+                        </div>
+                        <div className="text-right">
+                          <p className="text-wz-white font-display font-black text-lg leading-none">
+                            {warrior.badgeProgress}<span className="text-wz-muted text-xs">/{badgeData.badge.maxProgress}</span>
+                          </p>
+                          <p className="text-[#FFD700] text-[9px] font-mono tracking-widest mt-1 uppercase">
+                            {warrior.badgeTier}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {/* PINNED USER (if outside Top 9 or no progress) */}
+                {badgeData.currentUser && (badgeData.currentUser.rankPosition === '-' || badgeData.currentUser.rankPosition > 9) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="mt-6 pt-4 border-t border-wz-border/20 relative"
+                  >
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black px-4 text-[10px] text-wz-muted font-mono tracking-widest uppercase">
+                      Your Position
+                    </div>
+                    <div className={`glass-card p-4 flex items-center gap-4 transition-colors border-[#007AFF]/20 bg-[#007AFF]/5 shadow-[0_0_15px_rgba(0,122,255,0.05)]`}>
+                      <div className="w-8 flex justify-center">
+                        <span className={`font-display font-black text-xl italic text-wz-white/50`}>
+                          {badgeData.currentUser.rankPosition}
+                        </span>
+                      </div>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black overflow-hidden border border-[#007AFF]/40">
+                         {badgeData.currentUser.profilePictureUrl ? (
+                           <img src={badgeData.currentUser.profilePictureUrl} alt={badgeData.currentUser.username} className="w-full h-full object-cover" />
+                         ) : (
+                           <span className="text-white/50 text-xs font-display font-black">{badgeData.currentUser.username?.[0] || '?'}</span>
+                         )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className={`font-mono font-bold truncate text-[#007AFF]`}>
+                            {badgeData.currentUser.username}
+                          </p>
+                        </div>
+                        <RankBadge rank={badgeData.currentUser.militaryRank} size="sm" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-wz-white font-display font-black text-lg leading-none">
+                          {badgeData.currentUser.badgeProgress}<span className="text-wz-muted text-xs">/{badgeData.badge.maxProgress}</span>
+                        </p>
+                        <p className="text-[#FFD700]/70 text-[9px] font-mono tracking-widest mt-1 uppercase">
+                          {badgeData.currentUser.badgeTier}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
+            
+            {badgeData?.top9?.length === 0 && (
+              <div className="text-center py-10 mt-10">
+                <span className="text-3xl filter grayscale opacity-20 mb-3 block">{badgesList.find((b: any) => b.key === activeBadgeKey)?.icon}</span>
+                <p className="text-wz-white/40 font-mono text-xs uppercase tracking-widest">No warriors have secured this medal yet.</p>
               </div>
             )}
           </>

@@ -1,30 +1,34 @@
 /**
  * WARZONE — Duel Read View
- * Full conversation reader with per-player reactions.
- * Users read the debate and react to decide the winner.
+ * Full conversation reader with VOTE + HYPE system.
+ * Users read the debate, vote for one player, and hype the debate.
  */
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { REACTION_CONFIG, getReactionScore, getTotalReactions } from '../../../lib/duelTopics';
-import { useDuelStore, type Duel } from '../../../stores/duelStore';
+import { motion } from 'framer-motion';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useDuelStore } from '../../../stores/duelStore';
+import { api } from '../../../lib/api';
 
 export default function DuelReadView() {
   const viewingDuel = useDuelStore((s) => s.viewingDuel);
   const closeViewDuel = useDuelStore((s) => s.closeViewDuel);
-  const reactToDuel = useDuelStore((s) => s.reactToDuel);
-
-  const [reactingTo, setReactingTo] = useState<'player1' | 'player2' | null>(null);
+  const queryClient = useQueryClient();
 
   if (!viewingDuel) return null;
 
-  const { id, player1, player2, topic, messages, status, player1Reactions, player2Reactions, verdictAt, myReactions, winner } = viewingDuel;
+  const { id, player1, player2, topic, messages, status, verdictAt, winner, player1Votes, player2Votes, myVote, hypeCount, myHype } = viewingDuel;
 
-  const p1Score = getReactionScore(player1Reactions);
-  const p2Score = getReactionScore(player2Reactions);
-  const totalP1 = getTotalReactions(player1Reactions);
-  const totalP2 = getTotalReactions(player2Reactions);
-  const totalAll = totalP1 + totalP2 || 1;
+  // Local state for optimistic updates
+  const [localP1Votes, setLocalP1Votes] = useState(player1Votes);
+  const [localP2Votes, setLocalP2Votes] = useState(player2Votes);
+  const [localMyVote, setLocalMyVote] = useState(myVote);
+  const [localHype, setLocalHype] = useState(hypeCount);
+  const [localMyHype, setLocalMyHype] = useState(myHype);
+
+  const totalVotes = localP1Votes + localP2Votes || 1;
+  const p1Pct = Math.round((localP1Votes / totalVotes) * 100);
+  const p2Pct = 100 - p1Pct;
 
   const now = Date.now();
   const timeRemaining = verdictAt ? Math.max(0, verdictAt - now) : 0;
@@ -33,11 +37,37 @@ export default function DuelReadView() {
   const isVoting = status === 'voting' && timeRemaining > 0;
   const isCompleted = status === 'completed' || (status === 'voting' && timeRemaining <= 0);
 
-  const effectiveWinner = winner || (isCompleted ? (p1Score >= p2Score ? player1.id : player2.id) : null);
+  const effectiveWinner = winner || (isCompleted ? (localP1Votes >= localP2Votes ? player1.id : player2.id) : null);
 
-  function handleReact(player: 'player1' | 'player2', reaction: string) {
-    reactToDuel(id, player, reaction);
-    setReactingTo(null);
+  function handleVote(player: 'player1' | 'player2') {
+    // Optimistic update
+    const prev = localMyVote;
+    if (prev === 'player1') setLocalP1Votes((v) => Math.max(0, v - 1));
+    if (prev === 'player2') setLocalP2Votes((v) => Math.max(0, v - 1));
+    if (prev === player) {
+      setLocalMyVote(null);
+    } else {
+      if (player === 'player1') setLocalP1Votes((v) => v + 1);
+      else setLocalP2Votes((v) => v + 1);
+      setLocalMyVote(player);
+    }
+    // API call
+    api.duels.vote(id, player)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['duels'] }))
+      .catch((err) => console.error('Vote failed:', err));
+  }
+
+  function handleHype() {
+    if (localMyHype) {
+      setLocalHype((h) => Math.max(0, h - 1));
+      setLocalMyHype(false);
+    } else {
+      setLocalHype((h) => h + 1);
+      setLocalMyHype(true);
+    }
+    api.duels.hype(id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['duels'] }))
+      .catch((err) => console.error('Hype failed:', err));
   }
 
   return (
@@ -70,8 +100,9 @@ export default function DuelReadView() {
           {/* Topic */}
           <p className="text-white font-display font-bold text-base text-center leading-snug mb-3">📢 "{topic.text}"</p>
 
-          {/* Scoreboard */}
+          {/* Scoreboard with vote counts */}
           <div className="flex items-center gap-3">
+            {/* Player 1 */}
             <div className="flex-1 text-center">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-black"
@@ -82,22 +113,21 @@ export default function DuelReadView() {
                   {player1.username} {effectiveWinner === player1.id ? '👑' : ''}
                 </span>
               </div>
-              <div className="flex items-center justify-center gap-1">
-                <span className="text-[9px] font-mono text-[#00FF88]">+{player1Reactions.facts + player1Reactions.fire + player1Reactions.brutal}</span>
-                <span className="text-[9px] font-mono text-white/15">|</span>
-                <span className="text-[9px] font-mono text-[#FF2D55]">-{player1Reactions.toxic + player1Reactions.ltake}</span>
-              </div>
+              <span className="text-lg font-display font-black text-white">{localP1Votes}</span>
+              <span className="text-[9px] font-mono text-white/30 ml-1">votes ({p1Pct}%)</span>
             </div>
 
-            {/* Tug bar */}
+            {/* VS + Vote Bar */}
             <div className="w-24 flex flex-col items-center gap-1">
-              <div className="w-full flex h-1.5 rounded-full overflow-hidden bg-white/[0.04]">
-                <div className="h-full rounded-l-full transition-all duration-500" style={{ width: `${(totalP1 / totalAll) * 100}%`, background: player1.armyColor }} />
-                <div className="h-full rounded-r-full transition-all duration-500" style={{ width: `${(totalP2 / totalAll) * 100}%`, background: player2.armyColor }} />
+              <span className="text-white/15 text-[10px] font-display font-black">VS</span>
+              <div className="w-full flex h-2 rounded-full overflow-hidden bg-white/[0.04]">
+                <div className="h-full rounded-l-full transition-all duration-500" style={{ width: `${p1Pct}%`, background: player1.armyColor }} />
+                <div className="h-full rounded-r-full transition-all duration-500" style={{ width: `${p2Pct}%`, background: player2.armyColor }} />
               </div>
-              <span className="text-[8px] font-mono text-white/20">{totalP1 + totalP2} reactions</span>
+              <span className="text-[8px] font-mono text-white/20">{localP1Votes + localP2Votes} votes</span>
             </div>
 
+            {/* Player 2 */}
             <div className="flex-1 text-center">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <span className={`text-xs font-display font-bold ${effectiveWinner === player2.id ? 'text-[#00FF88]' : 'text-white'}`}>
@@ -108,11 +138,8 @@ export default function DuelReadView() {
                   {player2.username[0]}
                 </div>
               </div>
-              <div className="flex items-center justify-center gap-1">
-                <span className="text-[9px] font-mono text-[#00FF88]">+{player2Reactions.facts + player2Reactions.fire + player2Reactions.brutal}</span>
-                <span className="text-[9px] font-mono text-white/15">|</span>
-                <span className="text-[9px] font-mono text-[#FF2D55]">-{player2Reactions.toxic + player2Reactions.ltake}</span>
-              </div>
+              <span className="text-lg font-display font-black text-white">{localP2Votes}</span>
+              <span className="text-[9px] font-mono text-white/30 ml-1">votes ({p2Pct}%)</span>
             </div>
           </div>
         </div>
@@ -162,96 +189,61 @@ export default function DuelReadView() {
         </div>
       </div>
 
-      {/* Reaction Footer */}
+      {/* ── Vote + Hype Footer ── */}
       {isVoting && (
         <div className="shrink-0 border-t border-white/[0.06] p-4" style={{ background: 'rgba(8,8,8,0.95)' }}>
           <div className="max-w-lg mx-auto">
-            <p className="text-center text-[10px] font-mono text-white/30 mb-3 tracking-wider uppercase">Who won this debate? React below</p>
+            <p className="text-center text-[10px] font-mono text-white/30 mb-3 tracking-wider uppercase">Who won this debate? Vote below</p>
 
-            <div className="grid grid-cols-2 gap-3">
-              {/* React to Player 1 */}
-              <div>
+            <div className="flex gap-3 items-stretch">
+              {/* Vote Buttons */}
+              <div className="flex-1 flex gap-2">
+                {/* Vote Player 1 */}
                 <button
-                  onClick={() => setReactingTo(reactingTo === 'player1' ? null : 'player1')}
-                  className="w-full py-2.5 rounded-xl border text-xs font-display font-bold transition-all"
+                  onClick={() => handleVote('player1')}
+                  className="flex-1 py-3 rounded-xl border text-xs font-display font-bold transition-all relative overflow-hidden"
                   style={{
-                    borderColor: reactingTo === 'player1' ? `${player1.armyColor}50` : 'rgba(255,255,255,0.06)',
-                    background: reactingTo === 'player1' ? `${player1.armyColor}10` : 'rgba(255,255,255,0.02)',
-                    color: reactingTo === 'player1' ? player1.armyColor : 'rgba(255,255,255,0.5)',
+                    borderColor: localMyVote === 'player1' ? `${player1.armyColor}80` : 'rgba(255,255,255,0.06)',
+                    background: localMyVote === 'player1' ? `${player1.armyColor}20` : 'rgba(255,255,255,0.02)',
+                    color: localMyVote === 'player1' ? player1.armyColor : 'rgba(255,255,255,0.5)',
+                    boxShadow: localMyVote === 'player1' ? `0 0 20px ${player1.armyColor}20` : 'none',
                   }}
                 >
-                  {player1.username} {myReactions.player1 ? `• ${REACTION_CONFIG.find(r => r.key === myReactions.player1)?.emoji || ''}` : ''}
+                  {localMyVote === 'player1' && <span className="mr-1">✓</span>}
+                  {player1.username}
+                  <span className="block text-[9px] font-mono mt-0.5 opacity-60">{localP1Votes} votes</span>
                 </button>
 
-                <AnimatePresence>
-                  {reactingTo === 'player1' && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex gap-1.5 mt-2 flex-wrap"
-                    >
-                      {REACTION_CONFIG.map((r) => (
-                        <button
-                          key={r.key}
-                          onClick={() => handleReact('player1', r.key)}
-                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono transition-all ${
-                            myReactions.player1 === r.key
-                              ? 'border-white/20 bg-white/10'
-                              : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]'
-                          }`}
-                          style={{ color: r.color }}
-                        >
-                          <span>{r.emoji}</span>
-                          <span className="font-bold">{r.label}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* React to Player 2 */}
-              <div>
+                {/* Vote Player 2 */}
                 <button
-                  onClick={() => setReactingTo(reactingTo === 'player2' ? null : 'player2')}
-                  className="w-full py-2.5 rounded-xl border text-xs font-display font-bold transition-all"
+                  onClick={() => handleVote('player2')}
+                  className="flex-1 py-3 rounded-xl border text-xs font-display font-bold transition-all relative overflow-hidden"
                   style={{
-                    borderColor: reactingTo === 'player2' ? `${player2.armyColor}50` : 'rgba(255,255,255,0.06)',
-                    background: reactingTo === 'player2' ? `${player2.armyColor}10` : 'rgba(255,255,255,0.02)',
-                    color: reactingTo === 'player2' ? player2.armyColor : 'rgba(255,255,255,0.5)',
+                    borderColor: localMyVote === 'player2' ? `${player2.armyColor}80` : 'rgba(255,255,255,0.06)',
+                    background: localMyVote === 'player2' ? `${player2.armyColor}20` : 'rgba(255,255,255,0.02)',
+                    color: localMyVote === 'player2' ? player2.armyColor : 'rgba(255,255,255,0.5)',
+                    boxShadow: localMyVote === 'player2' ? `0 0 20px ${player2.armyColor}20` : 'none',
                   }}
                 >
-                  {player2.username} {myReactions.player2 ? `• ${REACTION_CONFIG.find(r => r.key === myReactions.player2)?.emoji || ''}` : ''}
+                  {localMyVote === 'player2' && <span className="mr-1">✓</span>}
+                  {player2.username}
+                  <span className="block text-[9px] font-mono mt-0.5 opacity-60">{localP2Votes} votes</span>
                 </button>
-
-                <AnimatePresence>
-                  {reactingTo === 'player2' && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex gap-1.5 mt-2 flex-wrap"
-                    >
-                      {REACTION_CONFIG.map((r) => (
-                        <button
-                          key={r.key}
-                          onClick={() => handleReact('player2', r.key)}
-                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[10px] font-mono transition-all ${
-                            myReactions.player2 === r.key
-                              ? 'border-white/20 bg-white/10'
-                              : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]'
-                          }`}
-                          style={{ color: r.color }}
-                        >
-                          <span>{r.emoji}</span>
-                          <span className="font-bold">{r.label}</span>
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
+
+              {/* Hype Button */}
+              <button
+                onClick={handleHype}
+                className={`px-4 rounded-xl border text-xs font-display font-bold transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  localMyHype
+                    ? 'bg-[#FF6B2C]/20 border-[#FF6B2C]/50 text-[#FF6B2C] shadow-[0_0_15px_rgba(255,107,44,0.2)]'
+                    : 'bg-white/[0.02] border-white/[0.06] text-white/40 hover:bg-white/[0.05] hover:text-white/60'
+                }`}
+              >
+                <span className="text-lg">🔥</span>
+                <span className="text-[9px] font-mono font-bold">{localHype}</span>
+                <span className="text-[7px] font-mono tracking-wider">HYPE</span>
+              </button>
             </div>
           </div>
         </div>
@@ -265,7 +257,7 @@ export default function DuelReadView() {
               🏆 {effectiveWinner === player1.id ? player1.username : player2.username} WON THE DEBATE
             </p>
             <p className="text-white/20 text-[10px] font-mono mt-1">
-              Score: {p1Score > p2Score ? p1Score : p2Score} vs {p1Score > p2Score ? p2Score : p1Score} • {totalP1 + totalP2} total reactions
+              Votes: {localP1Votes} vs {localP2Votes} • {localHype} hype
             </p>
           </div>
         </div>

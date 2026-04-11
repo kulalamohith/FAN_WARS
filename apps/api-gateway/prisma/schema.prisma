@@ -210,12 +210,13 @@ model Post {
   id          String    @id @default(uuid())
   userId      String
   content     String
+  imageUrl    String?
   type        String    @default("OPINION")  // OPINION, HYPE, DEBATE, MEME
   
   fireCount      Int    @default(0)
-  roastCount     Int    @default(0)
-  disagreeCount  Int    @default(0)
-  legendCount    Int    @default(0)
+  clownCount     Int    @default(0)
+  toxicCount     Int    @default(0)
+  laughCount     Int    @default(0)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -284,4 +285,66 @@ model UserBadge {
   @@unique([userId, badgeId])
   @@index([userId])
   @@map("user_badges")
+}
+
+model SniperDuel {
+  id            String    @id @default(uuid())
+  topicText     String
+  topicCategory String    @default("hot-take")
+
+  player1Id     String
+  player1Name   String
+  player1Army   String
+  player1Color  String
+
+  player2Id     String
+  player2Name   String
+  player2Army   String
+  player2Color  String
+
+  messages      String    @default("[]")   // JSON array of messages
+  status        String    @default("voting") // voting, completed
+
+  player1Votes  Int       @default(0)
+  player2Votes  Int       @default(0)
+  hypeCount     Int       @default(0)
+
+  winnerId      String?
+
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  verdictAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  votes         DuelVote[]
+  hypes         DuelHype[]
+
+  @@index([createdAt])
+  @@index([hypeCount])
+  @@map("sniper_duels")
+}
+
+model DuelVote {
+  id        String    @id @default(uuid())
+  duelId    String
+  userId    String
+  votedFor  String    // 'player1' or 'player2'
+  createdAt DateTime  @default(now())
+
+  duel      SniperDuel @relation(fields: [duelId], references: [id], onDelete: Cascade)
+
+  @@unique([duelId, userId])
+  @@map("duel_votes")
+}
+
+model DuelHype {
+  id        String    @id @default(uuid())
+  duelId    String
+  userId    String
+  createdAt DateTime  @default(now())
+
+  duel      SniperDuel @relation(fields: [duelId], references: [id], onDelete: Cascade)
+
+  @@unique([duelId, userId])
+  @@map("duel_hypes")
 }

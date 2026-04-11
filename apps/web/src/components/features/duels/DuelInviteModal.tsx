@@ -3,30 +3,56 @@
  * Challenge flow: pick opponent, pick topic, send challenge.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DUEL_TOPICS, SIMULATED_USERS, type SimUser, type DuelTopic } from '../../../lib/duelTopics';
+import { DUEL_TOPICS, type SimUser, type DuelTopic } from '../../../lib/duelTopics';
 import { useDuelStore, type DuelPlayer } from '../../../stores/duelStore';
 import { useAuthStore } from '../../../stores/authStore';
+import { useGlobalSocketStore } from '../../../stores/globalSocketStore';
+import { api } from '../../../lib/api';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  defaultSearch?: string;
+  defaultOpponent?: SimUser | null;
 }
 
-export default function DuelInviteModal({ isOpen, onClose }: Props) {
-  const [step, setStep] = useState<'opponent' | 'topic' | 'confirm'>('opponent');
-  const [selectedOpponent, setSelectedOpponent] = useState<SimUser | null>(null);
+export default function DuelInviteModal({ isOpen, onClose, defaultSearch = '', defaultOpponent = null }: Props) {
+  const [step, setStep] = useState<'opponent' | 'topic' | 'confirm'>(defaultOpponent ? 'topic' : 'opponent');
+  const [selectedOpponent, setSelectedOpponent] = useState<SimUser | null>(defaultOpponent);
   const [selectedTopic, setSelectedTopic] = useState<DuelTopic | null>(null);
-  const [search, setSearch] = useState('');
+  const [customTopic, setCustomTopic] = useState('');
+  const [search, setSearch] = useState(defaultSearch);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [filteredUsers, setFilteredUsers] = useState<SimUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const user = useAuthStore((s) => s.user);
-  const startDuel = useDuelStore((s) => s.startDuel);
+  const sendChallenge = useGlobalSocketStore((s) => s.sendChallenge);
 
-  const filteredUsers = SIMULATED_USERS.filter((u) =>
-    u.username.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (search.trim().length === 0) {
+        setFilteredUsers([]);
+        setIsSearching(false);
+        return;
+      }
+      setIsSearching(true);
+      try {
+        const res = await api.profile.search(search);
+        if (res && res.users) {
+          setFilteredUsers(res.users);
+        }
+      } catch (err) {
+        console.error('Failed to hunt warriors:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const filteredTopics = DUEL_TOPICS.filter((t) =>
     categoryFilter === 'all' || t.category === categoryFilter
@@ -37,15 +63,11 @@ export default function DuelInviteModal({ isOpen, onClose }: Props) {
   function handleConfirm() {
     if (!selectedOpponent || !selectedTopic || !user) return;
 
-    const currentUser: DuelPlayer = {
-      id: user.id,
-      username: user.username,
-      army: typeof user.army === 'string' ? user.army : user.army?.name || 'CSK',
-      armyColor: typeof user.army === 'string' ? '#FFFF3C' : user.army?.colorHex || '#FFFF3C',
-    };
-
-    startDuel(selectedOpponent, selectedTopic, currentUser);
+    sendChallenge(selectedOpponent.id, user.username, selectedTopic.text, user.id);
+    
+    // Auto-close modal after challenge is sent
     handleClose();
+    // Maybe show a toast notification here later
   }
 
   function handleClose() {
@@ -143,6 +165,37 @@ export default function DuelInviteModal({ isOpen, onClose }: Props) {
             {/* Step 2: Pick topic */}
             {step === 'topic' && (
               <motion.div key="topic" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                {/* Custom Topic Input */}
+                <div className="mb-6">
+                  <p className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-widest mb-2">CREATE YOUR OWN</p>
+                  <textarea
+                    placeholder="Eg: Dhoni is better than Kohli..."
+                    value={customTopic}
+                    onChange={(e) => setCustomTopic(e.target.value)}
+                    rows={2}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white text-sm font-mono placeholder:text-white/20 focus:border-[#FF2D55]/40 outline-none mb-2 transition-colors resize-none"
+                  />
+                  <button
+                    disabled={customTopic.trim().length === 0}
+                    onClick={() => {
+                      setSelectedTopic({ id: 'custom', text: customTopic.trim(), category: 'hot-take', side1Label: 'FOR', side2Label: 'AGAINST' });
+                      setStep('confirm');
+                    }}
+                    className={`w-full py-3.5 rounded-xl font-display font-black text-sm tracking-wider text-white shadow-lg transition-all ${
+                      customTopic.trim().length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:scale-[1.02] active:scale-95'
+                    }`}
+                    style={{ background: 'linear-gradient(135deg, #FF2D55, #FF6B2C)' }}
+                  >
+                    CONTINUE WITH CUSTOM TOPIC
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="h-px bg-white/10 flex-1"></div>
+                  <span className="text-[10px] font-mono font-bold text-white/30 uppercase tracking-widest">OR PICK A SUGGESTION</span>
+                  <div className="h-px bg-white/10 flex-1"></div>
+                </div>
+
                 {/* Category pills */}
                 <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-1">
                   {categories.map((cat) => (
@@ -170,8 +223,8 @@ export default function DuelInviteModal({ isOpen, onClose }: Props) {
                     >
                       <p className="text-white text-sm font-display font-bold leading-snug group-hover:text-[#FF6B2C] transition-colors">"{t.text}"</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-white/30 uppercase tracking-wider">{t.category}</span>
-                        <span className="text-[9px] font-mono text-white/20">{t.side1Label} vs {t.side2Label}</span>
+                         <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-white/30 uppercase tracking-wider">{t.category}</span>
+                         <span className="text-[9px] font-mono text-white/20">{t.side1Label} vs {t.side2Label}</span>
                       </div>
                     </motion.button>
                   ))}

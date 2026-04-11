@@ -69,11 +69,16 @@ export const bunkersRoutes: FastifyPluginAsync = async (fastify) => {
       const data = joinBunkerSchema.parse(request.body);
 
       const bunker = await db.bunker.findUnique({
-        where: { inviteCode: data.inviteCode.toUpperCase() }
+        where: { inviteCode: data.inviteCode.toUpperCase() },
+        include: { _count: { select: { members: true } } }
       });
 
       if (!bunker) {
         return reply.notFound('Invalid invite code. Bunker not found.');
+      }
+
+      if (bunker._count.members >= 12) {
+        return reply.forbidden('Private War Room has reached max capacity (12 members).');
       }
 
       // Add to bunker member list
@@ -172,6 +177,64 @@ export const bunkersRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error) {
       fastify.log.error(error);
       return reply.internalServerError('Failed to fetch bunker details');
+    }
+  });
+  // --- DELETE Member (Kick User) ---
+  fastify.delete('/:id/members/:userId', { preValidation: [fastify.verifyJWT] }, async (request, reply) => {
+    const { id, userId } = request.params as { id: string; userId: string };
+
+    try {
+      const bunker = await db.bunker.findUnique({ where: { id } });
+      if (!bunker) return reply.notFound('Bunker not found');
+
+      if (bunker.creatorId !== request.user.id) {
+        return reply.forbidden('Only the host can remove members.');
+      }
+
+      if (userId === request.user.id) {
+        return reply.badRequest('You cannot kick yourself. Please leave instead.');
+      }
+
+      await db.bunkerMember.deleteMany({
+        where: {
+          bunkerId: id,
+          userId: userId
+        }
+      });
+
+      // Emit socket event to the kicked user (handled on frontend)
+      fastify.io.to(`bunker_${id}`).emit('bunker_kicked', { userId });
+
+      return { success: true };
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.internalServerError('Failed to remove member');
+    }
+  });
+
+  // --- DELETE Bunker (End Room) ---
+  fastify.delete('/:id', { preValidation: [fastify.verifyJWT] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    try {
+      const bunker = await db.bunker.findUnique({ where: { id } });
+      if (!bunker) return reply.notFound('Bunker not found');
+
+      if (bunker.creatorId !== request.user.id) {
+        return reply.forbidden('Only the host can end the room.');
+      }
+
+      // Delete members then bunker
+      await db.bunkerMember.deleteMany({ where: { bunkerId: id } });
+      await db.bunker.delete({ where: { id } });
+
+      // Emit socket event to all users in room
+      fastify.io.to(`bunker_${id}`).emit('bunker_ended', { bunkerId: id });
+
+      return { success: true };
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.internalServerError('Failed to end bunker');
     }
   });
 }

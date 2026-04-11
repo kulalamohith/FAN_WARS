@@ -15,6 +15,7 @@ import PostsPage from './pages/PostsPage';
 import PollsPage from './pages/PollsPage';
 import ProfilePage from './pages/ProfilePage';
 import MainLayout from './components/ui/MainLayout';
+import GlobalDuelManager from './components/features/duels/GlobalDuelManager';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -52,6 +53,7 @@ export default function App() {
 
   return (
     <MainLayout>
+      <GlobalDuelManager />
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

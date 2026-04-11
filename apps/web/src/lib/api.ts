@@ -8,17 +8,26 @@ const BASE = '/api/v1';
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('wz_token');
 
+  const hdrs: Record<string, string> = {};
+  if (token) hdrs['Authorization'] = `Bearer ${token}`;
+  if (options.body) hdrs['Content-Type'] = 'application/json';
+
   const res = await fetch(`${BASE}${url}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
+    headers: { ...hdrs, ...(options.headers as Record<string, string>) },
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Request failed' }));
+
+    // Auto-logout on expired / invalid token
+    if (res.status === 401) {
+      localStorage.removeItem('wz_token');
+      localStorage.removeItem('wz_user');
+      window.location.href = '/login';
+      throw new Error('Session expired — please log in again');
+    }
+
     throw new Error(err.message || `HTTP ${res.status}`);
   }
 
@@ -93,6 +102,15 @@ export const api = {
     getTop: () => request<{ success: boolean; leaderboard: any[] }>('/leaderboard'),
     armies: () => request<{ success: boolean; armies: any[] }>('/leaderboard/armies'),
     teamContext: () => request<any>('/leaderboard/team-context'),
+    badgesList: () => request<{ success: boolean; badges: any[] }>('/leaderboard/badges-list'),
+    badgeLeaderboard: (key: string) => {
+      const token = localStorage.getItem('wz_token');
+      return fetch(`${BASE}/leaderboard/badges/${key}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }).then(res => res.json());
+    },
   },
 
   // ---- Roasts ----
@@ -132,19 +150,24 @@ export const api = {
       request<{ success: boolean; bunkers: any[] }>('/bunkers/my'),
     get: (id: string) =>
       request<{ success: boolean; bunker: any }>(`/bunkers/${id}`),
+    kickMember: (id: string, userId: string) =>
+      request<{ success: boolean }>(`/bunkers/${id}/members/${userId}`, { method: 'DELETE' }),
+    delete: (id: string) =>
+      request<{ success: boolean }>(`/bunkers/${id}`, { method: 'DELETE' }),
   },
 
   // ---- Posts (Social Feed) ----
   posts: {
-    feed: (sort: 'hot' | 'new' = 'hot', type?: string, cursor?: string) => {
+    feed: (sort: 'hot' | 'new' = 'new', mine: boolean = false, type?: string, cursor?: string) => {
       const params = new URLSearchParams({ sort, limit: '20' });
+      if (mine) params.set('mine', 'true');
       if (type) params.set('type', type);
       if (cursor) params.set('cursor', cursor);
       return request<{ posts: any[]; nextCursor: string | null }>(`/posts/feed?${params}`);
     },
-    create: (content: string, type: string = 'OPINION') =>
+    create: (content: string, type: string = 'OPINION', imageUrl?: string) =>
       request<{ success: boolean; post: any }>('/posts', {
-        method: 'POST', body: JSON.stringify({ content, type }),
+        method: 'POST', body: JSON.stringify({ content, type, imageUrl }),
       }),
     react: (id: string, type: string) =>
       request<{ action: string; type: string }>(`/posts/${id}/react`, {
@@ -152,6 +175,16 @@ export const api = {
       }),
     delete: (id: string) =>
       request<{ success: boolean }>(`/posts/${id}`, { method: 'DELETE' }),
+    upload: (formData: FormData) => {
+      const token = localStorage.getItem('wz_token');
+      return fetch(`${BASE}/posts/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      }).then(res => res.json());
+    },
   },
 
   // ---- Profile ----
@@ -160,6 +193,8 @@ export const api = {
       request<any>('/profile/me'),
     user: (username: string) =>
       request<any>(`/profile/${username}`),
+    search: (query: string) =>
+      request<{ users: any[] }>(`/profile/search?q=${query}`),
     pinBadge: (badgeKey: string, pin: boolean) =>
       request<{ success: boolean; message: string }>('/profile/badges/pin', {
         method: 'POST', body: JSON.stringify({ badgeKey, pin }),
@@ -178,5 +213,34 @@ export const api = {
         body: formData,
       }).then(res => res.json());
     },
+  },
+
+  // ---- Duels (Sniper Duels — Global Feed) ----
+  duels: {
+    save: (data: {
+      topicText: string;
+      topicCategory: string;
+      player1: { id: string; username: string; army: string; armyColor: string };
+      player2: { id: string; username: string; army: string; armyColor: string };
+      messages: any[];
+      startedAt?: number;
+      endedAt?: number;
+    }) =>
+      request<{ success: boolean; duel: { id: string } }>('/duels', {
+        method: 'POST', body: JSON.stringify(data),
+      }),
+    feed: (sort: 'recent' | 'hype' = 'recent', cursor?: string) => {
+      const params = new URLSearchParams({ sort, limit: '20' });
+      if (cursor) params.set('cursor', cursor);
+      return request<{ duels: any[]; nextCursor: string | null }>(`/duels/feed?${params}`);
+    },
+    vote: (id: string, votedFor: 'player1' | 'player2') =>
+      request<{ action: string; votedFor: string | null }>(`/duels/${id}/vote`, {
+        method: 'POST', body: JSON.stringify({ votedFor }),
+      }),
+    hype: (id: string) =>
+      request<{ action: string; hyped: boolean }>(`/duels/${id}/hype`, {
+        method: 'POST',
+      }),
   },
 };

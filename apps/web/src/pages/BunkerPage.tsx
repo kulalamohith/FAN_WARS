@@ -9,6 +9,8 @@ import { RankBadge } from '../components/ui/RankBadge';
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { useWarRoomStore } from '../stores/warRoomStore';
+import QuickProfileModal, { QuickProfileUser } from '../components/ui/QuickProfileModal';
+import DuelInviteModal from '../components/features/duels/DuelInviteModal';
 
 export default function BunkerPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,12 +18,43 @@ export default function BunkerPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   
-  const { connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, activePredictions, liveReactions, sendReaction } = useWarRoomStore();
+  const { connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, activeAdminEvent } = useWarRoomStore();
 
   const [votedPredictions, setVotedPredictions] = useState<Set<string>>(new Set());
   const [chatInput, setChatInput] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [profileUser, setProfileUser] = useState<QuickProfileUser | null>(null);
+
+  const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
+  const [challengerMsg, setChallengerMsg] = useState<any | null>(null);
+
+  const handleMsgReact = (msgId: string, type: 'toxic' | 'fire' | 'clown') => {
+    setMessageReactions(prev => ({
+      ...prev,
+      [msgId]: {
+        toxic: (prev[msgId]?.toxic || 0) + (type === 'toxic' ? 1 : 0),
+        fire: (prev[msgId]?.fire || 0) + (type === 'fire' ? 1 : 0),
+        clown: (prev[msgId]?.clown || 0) + (type === 'clown' ? 1 : 0),
+      }
+    }));
+  };
+
+  // Handle Socket Kicks / Ends
+  useEffect(() => {
+    if (kickedUserId === user?.id) {
+      alert("You have been removed from this room by the host.");
+      navigate('/');
+    }
+  }, [kickedUserId, user?.id, navigate]);
+
+  useEffect(() => {
+    if (isBunkerEnded) {
+      alert("This Private War Room has been ended by the host.");
+      navigate('/');
+    }
+  }, [isBunkerEnded, navigate]);
 
   // Clock tick for prediction countdowns
   useEffect(() => {
@@ -86,6 +119,19 @@ export default function BunkerPage() {
     }
   });
 
+  const kickMutation = useMutation({
+    mutationFn: (userId: string) => api.bunkers.kickMember(id!, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bunker', id] });
+    }
+  });
+
+  const endRoomMutation = useMutation({
+    mutationFn: () => api.bunkers.delete(id!),
+    // On success handled by socket event mostly, but as fallback navigate
+    onSuccess: () => navigate('/')
+  });
+
   const handleSendChat = () => {
     if (!chatInput.trim() || !id || !user || !bunker) return;
 
@@ -139,7 +185,7 @@ export default function BunkerPage() {
             <p className="text-wz-muted text-xs font-mono mb-6">This bunker does not exist or you are not a member.</p>
             
             <div className="mb-8 pt-4 border-t border-white/5">
-              <p className="text-white/60 font-mono text-xs mb-3">HAVE AN INVITE CODE?</p>
+              <p className="text-white/60 font-mono text-xs mb-3">HAVE A ROOM CODE?</p>
               <div className="flex flex-col gap-2">
                 <input 
                   type="text" 
@@ -149,13 +195,13 @@ export default function BunkerPage() {
                   maxLength={6}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-wz-red/50 outline-none uppercase"
                 />
-                <WarzoneButton 
+                  <WarzoneButton 
                   variant="danger" 
                   fullWidth 
                   onClick={() => joinBunkerMutation.mutate()} 
                   disabled={inviteCode.length < 5 || joinBunkerMutation.isPending}
                 >
-                  Join Bunker
+                  Join War Room
                 </WarzoneButton>
                 {joinBunkerMutation.isError && <p className="text-wz-red text-[10px] mt-1 text-center font-mono">Invalid or expired code.</p>}
                 {error && <p className="text-white/50 bg-black/50 p-2 rounded text-[10px] mt-2 font-mono break-all font-bold text-center">API Error: {error.message}</p>}
@@ -202,22 +248,55 @@ export default function BunkerPage() {
         </AnimatePresence>
       </div>
 
+      <AnimatePresence>
+        {challengerMsg && (
+          <DuelInviteModal
+            isOpen={true}
+            defaultOpponent={{
+              id: challengerMsg.userId,
+              username: challengerMsg.username,
+              army: challengerMsg.armyId || 'Recruit',
+              armyColor: '#FFFFFF',
+              rank: challengerMsg.rank || 'Recruit',
+              wins: 0,
+              losses: 0,
+            }}
+            onClose={() => setChallengerMsg(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* === HUD Header === */}
       <header className="sticky top-0 z-50 bg-black/70 backdrop-blur-2xl border-b border-wz-border/20">
         <div className="px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2">
           {/* Top Row: Back / Match / Members */}
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/')}
-              className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 text-wz-muted hover:text-white hover:bg-white/10 text-[10px] sm:text-xs font-bold font-mono transition-colors"
-            >
-              ← <span className="hidden sm:inline">LEAVE BUNKER</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/')}
+                className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 text-wz-muted hover:text-white hover:bg-white/10 text-[10px] sm:text-xs font-bold font-mono transition-colors"
+               >
+                ← <span className="hidden sm:inline">LEAVE</span>
+              </button>
+              {bunker.creatorId === user?.id && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to end this room for everyone?")) {
+                      endRoomMutation.mutate();
+                    }
+                  }}
+                  disabled={endRoomMutation.isPending}
+                  className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-wz-red/20 text-wz-red hover:bg-wz-red hover:text-white border border-wz-red/30 text-[10px] sm:text-xs font-bold font-mono transition-colors"
+                >
+                  END ROOM
+                </button>
+              )}
+            </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="flex flex-col items-center">
                 <span className="text-[10px] text-wz-yellow font-bold font-mono tracking-widest leading-none mb-1 shadow-[0_0_10px_rgba(255,214,10,0.5)]">
-                  BUNKER: {bunker.name.toUpperCase()}
+                  PRIVATE: {bunker.name.toUpperCase()}
                 </span>
                 <span className="text-[10px] bg-wz-yellow/20 text-wz-yellow px-2 py-0.5 rounded border border-wz-yellow/30 font-mono flex items-center gap-1">
                   INVITE CODE: <strong className="select-all tracking-wider">{bunker.inviteCode}</strong>
@@ -234,10 +313,10 @@ export default function BunkerPage() {
               </div>
             </div>
 
-            <div className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 flex items-center gap-1 sm:gap-2">
+            <button onClick={() => setShowMembersModal(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-wz-neon animate-pulse" />
               <span className="text-[10px] sm:text-xs font-mono font-bold text-white/80">{bunker.members.length} ONLINE</span>
-            </div>
+            </button>
           </div>
         </div>
       </header>
@@ -246,6 +325,20 @@ export default function BunkerPage() {
       <main className="flex-1 relative z-10 overflow-y-auto pt-4 pb-48 scrollbar-hide">
         <div className="max-w-xl mx-auto px-4 flex flex-col gap-4 min-h-full justify-end">
           
+          {/* Admin Event Banner */}
+          {activeAdminEvent && activeAdminEvent.type === 'JINX' && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full p-4 mb-4 rounded-xl bg-purple-900/50 border border-purple-500/50 flex flex-col items-center">
+               <span className="text-2xl mb-1 drop-shadow-[0_0_10px_purple]">🔮 JINX ACTIVE</span>
+               <p className="text-white text-sm font-bold text-center">{activeAdminEvent.data.message || 'Someone activated a Jinx!'}</p>
+            </motion.div>
+          )}
+          {activeAdminEvent && activeAdminEvent.type === 'DEBATE' && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full p-4 mb-4 rounded-xl bg-[#0057E2]/30 border border-[#0057E2]/50 flex flex-col items-center">
+               <span className="text-2xl mb-1 drop-shadow-[0_0_10px_blue]">⚔️ HOT DEBATE</span>
+               <p className="text-white text-sm font-bold text-center">{activeAdminEvent.data.question || 'A debate has started.'}</p>
+            </motion.div>
+          )}
+
           {/* Predictions Deck */}
           {allActivePredictions.length > 0 && (
             <div className="sticky top-0 z-30 flex flex-col gap-3 py-4 -mx-4 px-4 bg-gradient-to-b from-black/80 to-transparent">
@@ -327,7 +420,7 @@ export default function BunkerPage() {
             {bunkerMessages.length === 0 ? (
               <div className="text-center py-10 opacity-30 mt-auto">
                 <p className="text-4xl mb-2">🤫</p>
-                <p className="text-white font-mono text-xs">The bunker is silent. Drop a message.</p>
+                <p className="text-white font-mono text-xs">The room is silent. Drop a message.</p>
               </div>
             ) : (
               bunkerMessages.map((msg, i) => {
@@ -342,12 +435,25 @@ export default function BunkerPage() {
                     className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                   >
                     {showHeader && !isMe && (
-                      <div className="flex items-center gap-1.5 mb-1 pl-1">
-                        <span className="text-white/80 font-bold text-xs">{msg.username}</span>
+                      <div className="flex items-center gap-1.5 mb-1 pl-1 w-full">
+                        <button
+                          onClick={() => setProfileUser({ id: msg.userId, username: msg.username, rank: msg.rank as string || 'RECRUIT', armyName: msg.armyId || 'N/A' })}
+                          className="text-white/80 font-bold text-xs hover:underline cursor-pointer"
+                        >
+                          {msg.username}
+                        </button>
                         <RankBadge rank={msg.rank as any} size="sm" />
                         <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded font-mono text-white/50 border border-white/5 uppercase">
                           {msg.armyId}
                         </span>
+                        
+                        <button 
+                          onClick={() => setChallengerMsg(msg)}
+                          className="ml-auto px-1.5 py-0.5 border border-[#FF6B2C]/50 rounded bg-[#FF6B2C]/10 text-[#FF6B2C] hover:text-white text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#FF6B2C]/50 transition-colors"
+                          title={`Challenge ${msg.username} to Sniper Duel`}
+                        >
+                          [1v1 SD]
+                        </button>
                       </div>
                     )}
                     
@@ -358,6 +464,20 @@ export default function BunkerPage() {
                     }`}>
                       <p className="text-sm leading-snug">{msg.text}</p>
                     </div>
+
+                    {!isMe && (
+                      <div className="flex items-center gap-1.5 mt-1 pl-1">
+                        <button onClick={() => handleMsgReact(msg.id, 'toxic')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                          ☠️ <span className={messageReactions[msg.id]?.toxic ? 'text-white' : ''}>{messageReactions[msg.id]?.toxic || 0}</span>
+                        </button>
+                        <button onClick={() => handleMsgReact(msg.id, 'fire')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                          🔥 <span className={messageReactions[msg.id]?.fire ? 'text-white' : ''}>{messageReactions[msg.id]?.fire || 0}</span>
+                        </button>
+                        <button onClick={() => handleMsgReact(msg.id, 'clown')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                          🤡 <span className={messageReactions[msg.id]?.clown ? 'text-white' : ''}>{messageReactions[msg.id]?.clown || 0}</span>
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 );
               })
@@ -395,7 +515,7 @@ export default function BunkerPage() {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-              placeholder="Send a message to the bunker..."
+              placeholder="Send a message..."
               className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-wz-red/50 focus:bg-white/10 transition-all placeholder:text-white/20 shadow-inner"
             />
             <button
@@ -410,6 +530,65 @@ export default function BunkerPage() {
           </div>
         </div>
       </div>
+
+      {/* === Members Modal === */}
+      <AnimatePresence>
+        {showMembersModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-5" onClick={() => setShowMembersModal(false)}>
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-sm rounded-2xl border border-white/10 p-6 shadow-2xl" style={{ background: 'rgba(15,15,15,0.97)' }}>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-display font-bold text-white">Room Members ({bunker.members.length}/12)</h2>
+                <button onClick={() => setShowMembersModal(false)} className="text-white/40 hover:text-white transition-colors text-xl">&times;</button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto space-y-3 pb-2">
+                {bunker.members.map((m: any) => {
+                  const isHost = bunker.creatorId === m.userId;
+                  const isMe = user?.id === m.userId;
+                  const iAmHost = bunker.creatorId === user?.id;
+
+                  return (
+                    <div key={m.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white font-bold shrink-0">
+                          {m.user.username[0].toUpperCase()}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                            {m.user.username} {isMe && <span className="text-[9px] bg-wz-yellow/20 text-wz-yellow px-1.5 py-0.5 rounded ml-1 tracking-wider uppercase font-mono">You</span>}
+                          </span>
+                          <span className="text-[10px] text-white/40 font-mono flex items-center gap-2">
+                            {m.user.army?.name || 'Recruit'} Army 
+                            {isHost && <span className="text-wz-red">👑 Host</span>}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {iAmHost && !isMe && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Kick ${m.user.username} from the room?`)) {
+                              kickMutation.mutate(m.userId);
+                            }
+                          }}
+                          disabled={kickMutation.isPending}
+                          className="px-3 py-1.5 text-[10px] font-bold font-mono text-white/50 bg-white/5 hover:bg-wz-red hover:text-white border border-white/10 hover:border-wz-red transition-colors rounded-lg"
+                        >
+                          KICK
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {profileUser && (
+        <QuickProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
+      )}
     </div>
   );
 }

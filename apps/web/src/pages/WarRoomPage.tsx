@@ -17,6 +17,7 @@ import Soundboard from '../components/live/Soundboard';
 import JinxMinigame from '../components/live/JinxMinigame';
 import SniperDuel from '../components/live/SniperDuel';
 import TraitorsDilemma from '../components/live/TraitorsDilemma';
+import DuelInviteModal from '../components/features/duels/DuelInviteModal';
 
 export default function WarRoomPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +37,20 @@ export default function WarRoomPage() {
   
   const [votedChaos, setVotedChaos] = useState(false);
   const [votedChaosOption, setVotedChaosOption] = useState<'A'|'B'>();
+
+  const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
+  const [challengerMsg, setChallengerMsg] = useState<any | null>(null);
+
+  const handleMsgReact = (msgId: string, type: 'toxic' | 'fire' | 'clown') => {
+    setMessageReactions(prev => ({
+      ...prev,
+      [msgId]: {
+        toxic: (prev[msgId]?.toxic || 0) + (type === 'toxic' ? 1 : 0),
+        fire: (prev[msgId]?.fire || 0) + (type === 'fire' ? 1 : 0),
+        clown: (prev[msgId]?.clown || 0) + (type === 'clown' ? 1 : 0),
+      }
+    }));
+  };
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -195,6 +210,22 @@ export default function WarRoomPage() {
             onClose={() => setShowSniperDuel(false)}
           />
         )}
+
+        {challengerMsg && (
+          <DuelInviteModal
+            isOpen={true}
+            defaultOpponent={{
+              id: challengerMsg.userId,
+              username: challengerMsg.username,
+              army: challengerMsg.armyId || 'Recruit',
+              armyColor: '#FFFFFF',
+              rank: challengerMsg.rank || 'Recruit',
+              wins: 0,
+              losses: 0,
+            }}
+            onClose={() => setChallengerMsg(null)}
+          />
+        )}
       </AnimatePresence>
 
       <header className="sticky top-0 z-50 bg-black/70 backdrop-blur-2xl border-b border-wz-border/20">
@@ -204,12 +235,6 @@ export default function WarRoomPage() {
               ← LEAVE
             </button>
             <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setShowSniperDuel(true)}
-                className="px-3 py-1 rounded bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/40 border border-yellow-500/50 text-[10px] font-mono font-bold animate-pulse"
-              >
-                🎯 1v1 DUEL
-              </button>
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00FF88] shadow-[0_0_8px_#00FF88]' : 'bg-wz-red/50'} animate-pulse`} />
                 <span className={`text-[9px] uppercase tracking-[0.3em] font-bold font-mono ${isConnected ? 'text-[#00FF88]' : 'text-wz-muted'}`}>
@@ -354,11 +379,33 @@ export default function WarRoomPage() {
                     className={`text-sm py-2 px-3 rounded-lg border-l-4 flex flex-col items-start gap-1 my-1 ${isAlly ? 'bg-white/5 border-l-wz-blue/50' : 'bg-wz-red/10 border-l-[#FF2D55]/50'}`} 
                     style={{ borderLeftColor: accentColor }}
                   >
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-2 mb-0.5 w-full">
                       <span className="font-bold font-mono text-[11px]" style={{ color: accentColor }}>{msg.username}</span>
                       <RankBadge rank={msg.rank || 'Recruit'} size="sm" />
+                      {!isMe && (
+                        <button 
+                          onClick={() => setChallengerMsg(msg)}
+                          className="ml-2 px-1.5 py-0.5 border border-[#FF6B2C]/50 rounded bg-[#FF6B2C]/10 text-[#FF6B2C] hover:text-white text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#FF6B2C]/50 transition-colors"
+                          title={`Challenge ${msg.username} to Sniper Duel`}
+                        >
+                          [1v1 SD]
+                        </button>
+                      )}
                     </div>
-                    <span className="text-wz-text/90 inline-block">{msg.text}</span>
+                    <span className="text-wz-text/90 inline-block mb-1">{msg.text}</span>
+                    
+                    {/* Reactions Block */}
+                    <div className="flex items-center gap-1.5 mt-0.5 w-full">
+                      <button onClick={() => handleMsgReact(msg.id, 'toxic')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                        ☠️ <span className={messageReactions[msg.id]?.toxic ? 'text-white' : ''}>{messageReactions[msg.id]?.toxic || 0}</span>
+                      </button>
+                      <button onClick={() => handleMsgReact(msg.id, 'fire')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                        🔥 <span className={messageReactions[msg.id]?.fire ? 'text-white' : ''}>{messageReactions[msg.id]?.fire || 0}</span>
+                      </button>
+                      <button onClick={() => handleMsgReact(msg.id, 'clown')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
+                        🤡 <span className={messageReactions[msg.id]?.clown ? 'text-white' : ''}>{messageReactions[msg.id]?.clown || 0}</span>
+                      </button>
+                    </div>
                   </motion.div>
                 );
               })

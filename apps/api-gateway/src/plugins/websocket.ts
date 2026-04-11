@@ -146,8 +146,66 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     // Broadcast individual reactions to the room for floating emoji effects
     socket.on('reaction', (data: { matchId: string; type: string }) => {
       const { matchId, type } = data;
-      // Broadcast immediately to everyone in the room (including sender if desired, or use socket.to().emit)
       io.to(`room_${matchId}`).emit('live_reaction', { type });
+    });
+
+    // --- 🎯 GLOBAL CONTEXTUAL SNIPER DUELS 🎯 ---
+    // User personal room for global notifications
+    socket.on('join_personal_channel', (userId: string) => {
+      socket.join(`user_${userId}`);
+      fastify.log.info(`[Socket.IO] Client ${socket.id} joined personal user_${userId}`);
+    });
+
+    // Send duel challenge
+    socket.on('send_duel_challenge', (data: { targetUserId: string; challengerId: string; challengerName: string; topicText: string }) => {
+      io.to(`user_${data.targetUserId}`).emit('duel_challenge', {
+        challengerId: data.challengerId,
+        challengerName: data.challengerName,
+        topicText: data.topicText,
+      });
+    });
+
+    // Accept duel challenge
+    socket.on('accept_duel_challenge', (data: { challengerId: string; challengerName: string; topicText: string; myUserId: string; myUsername: string }) => {
+      const duelId = `duel_${Date.now()}`;
+      const payload = {
+        duelId,
+        topicText: data.topicText,
+        opponentId: data.myUserId,
+        opponentName: data.myUsername,
+      };
+      
+      // Notify challenger it was accepted
+      io.to(`user_${data.challengerId}`).emit('duel_challenge_accepted', payload);
+      
+      // Notify the acceptor to route as well
+      io.to(`user_${data.myUserId}`).emit('duel_challenge_accepted', {
+        duelId,
+        topicText: data.topicText,
+        opponentId: data.challengerId,
+        opponentName: data.challengerName,
+      });
+    });
+
+    // Decline duel challenge
+    socket.on('decline_duel_challenge', (data: { challengerId: string }) => {
+      io.to(`user_${data.challengerId}`).emit('duel_challenge_declined');
+    });
+
+    // Join Duel Room
+    socket.on('join_duel_room', (duelId: string) => {
+      socket.join(duelId);
+      fastify.log.info(`[Socket.IO] Client ${socket.id} joined ${duelId}`);
+    });
+
+    // Send Duel Message
+    socket.on('send_duel_message', (data: { duelId: string; senderId: string; senderName: string; text: string }) => {
+      io.to(data.duelId).emit('duel_message', data);
+    });
+
+    // End Duel
+    socket.on('end_duel', (data: { duelId: string }) => {
+      io.to(data.duelId).emit('duel_ended');
     });
 
     socket.on('disconnect', () => {
