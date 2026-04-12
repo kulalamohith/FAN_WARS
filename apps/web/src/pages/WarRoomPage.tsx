@@ -466,6 +466,7 @@ export default function WarRoomPage() {
                    <Soundboard 
                      onPress={(type) => sendReaction({ matchId: matchId, type: type })} 
                      opponentTeam={room?.toxicity?.awayArmyId || "Rival"} 
+                     disrupted={false}
                    />
                 </motion.div>
               )}
