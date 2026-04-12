@@ -12,10 +12,11 @@ import BunkerPage from './pages/BunkerPage';
 import BunkerJoinPage from './pages/BunkerJoinPage';
 import LivePage from './pages/LivePage';
 import PostsPage from './pages/PostsPage';
-import PollsPage from './pages/PollsPage';
+import DuelsPage from './pages/DuelsPage';
 import ProfilePage from './pages/ProfilePage';
 import MainLayout from './components/ui/MainLayout';
 import GlobalDuelManager from './components/features/duels/GlobalDuelManager';
+import GlobalPointsToaster from './components/ui/GlobalPointsToaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -54,13 +55,15 @@ export default function App() {
   return (
     <MainLayout>
       <GlobalDuelManager />
+      <GlobalPointsToaster />
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/live" element={<ProtectedRoute><LivePage /></ProtectedRoute>} />
         <Route path="/posts" element={<ProtectedRoute><PostsPage /></ProtectedRoute>} />
-        <Route path="/polls" element={<ProtectedRoute><PollsPage /></ProtectedRoute>} />
+        <Route path="/duels" element={<ProtectedRoute><DuelsPage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
         <Route path="/roasts" element={<ProtectedRoute><RoastFeedPage /></ProtectedRoute>} />

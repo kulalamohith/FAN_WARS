@@ -9,6 +9,8 @@ import { RankBadge } from '../components/ui/RankBadge';
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { useWarRoomStore } from '../stores/warRoomStore';
+import { IPL_2026_SCHEDULE } from '../data/ipl2026';
+
 
 // === NEW AAA INTEGRATIONS ===
 import TugOfWarMeter from '../components/live/TugOfWarMeter';
@@ -41,6 +43,7 @@ export default function WarRoomPage() {
   const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
   const [challengerMsg, setChallengerMsg] = useState<any | null>(null);
 
+
   const handleMsgReact = (msgId: string, type: 'toxic' | 'fire' | 'clown') => {
     setMessageReactions(prev => ({
       ...prev,
@@ -69,13 +72,27 @@ export default function WarRoomPage() {
   const matchId = id?.startsWith('match-') ? id : `match-${id}`;
 
   useEffect(() => {
-    if (matchId) connect(matchId);
+    if (matchId) connect(matchId, user?.id);
     return () => disconnect();
-  }, [matchId, connect, disconnect]);
+  }, [matchId, connect, disconnect, user?.id]);
 
   const { data: room, isLoading, error } = useQuery({
     queryKey: ['warRoom', matchId],
     queryFn: async () => {
+      const numericId = parseInt(matchId.replace('match-', ''), 10);
+      const scheduleMatch = IPL_2026_SCHEDULE.find(m => m.id === numericId);
+      
+      if (scheduleMatch) {
+        const matchStartTime = new Date(scheduleMatch.datetime);
+        const now = new Date();
+        const isToday = matchStartTime.toDateString() === now.toDateString();
+        
+        // Lock if it's in the future and NOT today
+        if (matchStartTime > now && !isToday) {
+           return { locked: true, scheduleMatch };
+        }
+      }
+
       try {
         return await api.warRooms.get(matchId);
       } catch (e) {
@@ -129,6 +146,22 @@ export default function WarRoomPage() {
     });
     setChatInput('');
   };
+
+  if ((room as any)?.locked) {
+    return (
+      <div className="relative min-h-screen">
+        <AnimatedBackground />
+        <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+          <GlassCard className="p-10 text-center max-w-md w-full border-dashed border-white/20 bg-black/60 backdrop-blur-xl">
+             <div className="text-6xl mb-6 opacity-80">🔒</div>
+             <h1 className="text-2xl font-display font-black text-white uppercase tracking-widest mb-2">ACCESS DENIED</h1>
+             <p className="text-white/40 font-mono text-sm mb-8 leading-relaxed">The gates to this battleground open on match day. Return later, soldier.</p>
+             <WarzoneButton fullWidth onClick={() => navigate('/live')}>RETURN TO HQ</WarzoneButton>
+          </GlassCard>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -380,7 +413,13 @@ export default function WarRoomPage() {
                     style={{ borderLeftColor: accentColor }}
                   >
                     <div className="flex items-center gap-2 mb-0.5 w-full">
-                      <span className="font-bold font-mono text-[11px]" style={{ color: accentColor }}>{msg.username}</span>
+                      <button
+                        onClick={() => navigate(`/profile/${msg.username}`)}
+                        className="font-bold font-mono text-[11px] hover:underline cursor-pointer"
+                        style={{ color: accentColor }}
+                      >
+                        {msg.username}
+                      </button>
                       <RankBadge rank={msg.rank || 'Recruit'} size="sm" />
                       {!isMe && (
                         <button 
@@ -468,6 +507,7 @@ export default function WarRoomPage() {
           </div>
         </div>
       </main>
+
     </div>
   );
 }

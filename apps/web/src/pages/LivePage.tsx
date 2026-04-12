@@ -3,7 +3,7 @@ import GlassCard from '../components/ui/GlassCard';
 import { useNavigate } from 'react-router-dom';
 import { IPL_2026_SCHEDULE, IPLMatch } from '../data/ipl2026';
 import { useAuthStore } from '../stores/authStore';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import WarzoneButton from '../components/ui/WarzoneButton';
 import { motion } from 'framer-motion';
@@ -60,18 +60,21 @@ function CountdownTimer({ targetTime }: { targetTime: Date }) {
 function MatchCard({ 
   match, 
   status, 
-  onClick 
+  onClick,
+  liveViewers
 }: { 
   match: IPLMatch; 
   status: 'LIVE' | 'UPCOMING' | 'COMPLETED'; 
   onClick?: () => void;
+  liveViewers?: number;
 }) {
   const isLive = status === 'LIVE';
   const isCompleted = status === 'COMPLETED';
   const matchStartTime = new Date(match.datetime);
 
-  // Deterministic random user count
-  const activeUsers = Math.floor(Math.abs(Math.sin(match.id * 12.5)) * (isCompleted ? 0 : 5000) + (isCompleted ? 120 : 1200));
+  // Deterministic random user count for historical matches
+  const fallbackUsers = Math.floor(Math.abs(Math.sin(match.id * 12.5)) * (isCompleted ? 0 : 5000) + (isCompleted ? 120 : 1200));
+  const activeUsers = liveViewers !== undefined ? liveViewers : fallbackUsers;
 
   return (
     <GlassCard
@@ -129,7 +132,11 @@ function MatchCard({
           🏟️ {match.stadium}
         </span>
         
-        {onClick && (
+        {status === 'UPCOMING' ? (
+          <button disabled className="px-4 py-2 rounded-xl text-white/50 bg-white/5 cursor-not-allowed text-[10px] font-bold font-mono transition-all shrink-0 ml-2">
+            OPENS MATCH DAY 🔒
+          </button>
+        ) : onClick && (
           <button className={`px-4 py-2 rounded-xl text-white text-[10px] font-bold font-mono transition-all shrink-0 ml-2 ${isLive ? 'bg-wz-red hover:bg-[#FF453A] shadow-[0_0_15px_rgba(255,45,85,0.3)] group-hover:shadow-[0_0_20px_rgba(255,45,85,0.7)]' : 'bg-white/10 hover:bg-white/20'}`}>
             ENTER WAR ROOM →
           </button>
@@ -145,6 +152,9 @@ export default function LivePage() {
   const [now, setNow] = useState(new Date());
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
+
+  // Poll unique visitors
+  const { data: viewerData } = useQuery({ queryKey: ['viewers'], queryFn: () => api.matches.viewers(), refetchInterval: 10000 });
 
   // Private War Room State
   const [showCreateBunker, setShowCreateBunker] = useState('');
@@ -165,7 +175,7 @@ export default function LivePage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
-    }, 60000);
+    }, 10000); // Check every 10 seconds for match status transitions
     return () => clearInterval(timer);
   }, []);
 
@@ -252,7 +262,8 @@ export default function LivePage() {
                   key={match.id} 
                   match={match} 
                   status="LIVE" 
-                  onClick={() => navigate(`/war-room/match-${match.id}`)}
+                  onClick={() => navigate(`/war-room/${match.id}`)}
+                  liveViewers={viewerData?.counts?.[`match-${match.id}`] || viewerData?.counts?.[match.id.toString()] || 0}
                 />
               ))}
             </div>
@@ -275,7 +286,7 @@ export default function LivePage() {
                   key={match.id} 
                   match={match} 
                   status="UPCOMING" 
-                  onClick={() => navigate(`/war-room/match-${match.id}`)}
+                  liveViewers={viewerData?.counts?.[`match-${match.id}`] || viewerData?.counts?.[match.id.toString()] || 0}
                 />
               ))}
             </div>
@@ -304,8 +315,9 @@ export default function LivePage() {
               <MatchCard 
                 key={match.id} 
                 match={match} 
-                status="COMPLETED" 
-                onClick={() => navigate(`/war-room/match-${match.id}`)}
+                status="UPCOMING" 
+                onClick={() => navigate(`/war-room/${match.id}`)} 
+                liveViewers={viewerData?.counts?.[match.id.toString()] || 0}
               />
             ))}
           </div>

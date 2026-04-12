@@ -20,7 +20,7 @@ export default function QuickProfileModal({ user, onClose }: { user: QuickProfil
 
   const handleChallenge = () => {
     if (!topicText.trim() || !me) return;
-    sendChallenge(user.id, me.username, topicText, me.id);
+    sendChallenge(user.id, user.username, me.username, topicText, me.id);
     alert('Challenge sent!');
     onClose();
   };

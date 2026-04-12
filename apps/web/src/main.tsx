@@ -9,7 +9,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 30, // 30 seconds
-      retry: 2,
+      retry: (failureCount, error) => {
+        // Don't retry on auth errors (401) — retrying with an expired token is pointless
+        if (error?.message?.includes('401') || error?.message?.includes('Session expired') || error?.message?.includes('Invalid email')) return false;
+        return failureCount < 2;
+      },
       refetchOnWindowFocus: false,
     },
   },

@@ -11,6 +11,8 @@ import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { useState, useEffect } from 'react';
 
+import { IPL_2026_SCHEDULE, IPLMatch } from '../data/ipl2026';
+
 const TEAM_COLORS: Record<string, string> = {
   CSK: '#FFFF3C', RCB: '#EC1C24', MI: '#004BA0', KKR: '#2E0854',
   SRH: '#F26522', DC: '#00008B', PBKS: '#ED1B24', RR: '#EA1A85',
@@ -66,7 +68,6 @@ export default function DashboardPage() {
 
   /* ── data ── */
   const { data: profile } = useQuery({ queryKey: ['me'], queryFn: () => api.auth.me(), refetchInterval: 10000 });
-  const { data: matchesData, isLoading: matchesLoading } = useQuery({ queryKey: ['matches', 'live'], queryFn: () => api.matches.live(), refetchInterval: 15000 });
   const { data: leaderboardData } = useQuery({ queryKey: ['leaderboard', 'top3'], queryFn: () => api.leaderboard.getTop(), refetchInterval: 60000 });
   const { data: armyLeaderboard } = useQuery({ queryKey: ['leaderboard', 'armies'], queryFn: () => api.leaderboard.armies(), refetchInterval: 60000 });
   const { data: roastsData } = useQuery({ queryKey: ['roasts', 'legendary'], queryFn: () => api.roasts.feed('viral', undefined) });
@@ -92,11 +93,57 @@ export default function DashboardPage() {
     onSuccess: (r) => { setShowJoinBunker(false); setInviteCode(''); navigate(`/bunkers/${r.bunkerId}`); },
   });
 
-  const matches = matchesData?.matches || [];
-  const topRoasts = roastsData?.roasts?.slice(0, 3) || [];
-  const topWarriors = leaderboardData?.leaderboard?.slice(0, 3) || [];
+  const claimDailyRewardMut = useMutation({
+    mutationFn: () => api.profile.dailyClaim(),
+    onSuccess: (r) => {
+      if (r.alreadyClaimed) {
+         alert('You have already claimed your daily reward today.');
+         return;
+      }
+      if (user) {
+        setUser({ ...user, totalWarPoints: (Number(user.totalWarPoints) + (r.totalAwarded || r.pointsAwarded || 0)).toString() });
+        queryClient.invalidateQueries({ queryKey: ['me'] });
+      }
+      alert(`Claimed! +${r.totalAwarded || r.pointsAwarded || 0} War Points.\n${r.streakBonus ? `Includes streak bonus (+${r.streakBonus})!` : ''}\n${r.streakMilestone ? `🎉 Milestone Reached: ${r.streakMilestone}` : ''}`);
+    },
+    onError: (e: any) => {
+      alert(e.message || 'Failed to claim daily reward');
+    }
+  });
+
   const topArmies = armyLeaderboard?.armies?.slice(0, 5) || [];
   const myBunkers = myBunkersData?.bunkers || [];
+
+  const { data: viewerData } = useQuery({ 
+    queryKey: ['viewers'], 
+    queryFn: () => api.matches.viewers(), 
+    refetchInterval: 10000 
+  });
+
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const liveMatches: IPLMatch[] = [];
+  const upcomingMatches: IPLMatch[] = [];
+
+  IPL_2026_SCHEDULE.forEach(match => {
+    const matchStartTime = new Date(match.datetime);
+    const matchEndTime = new Date(matchStartTime.getTime() + 4 * 60 * 60 * 1000);
+    const isToday = matchStartTime.toDateString() === now.toDateString();
+    
+    if (isToday && now < matchEndTime) {
+      liveMatches.push(match);
+    } else if (matchStartTime > now && !isToday) {
+      upcomingMatches.push(match);
+    }
+  });
+
+  upcomingMatches.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
 
   const armyColor = profile?.army?.colorHex || user?.army?.colorHex || '#FF2D55';
   const armyName = profile?.army?.name || (typeof user?.army === 'string' ? user?.army : user?.army?.name) || '';
@@ -123,7 +170,7 @@ export default function DashboardPage() {
           <div className="flex-1 flex justify-end items-center gap-4 mr-4">
              <div className="hidden md:flex items-center gap-2">
                  <button 
-                  onClick={() => { matches.length ? setShowCreateBunker(matches[0].id) : alert('No live matches!'); }} 
+                  onClick={() => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); }} 
                   className="px-3 py-1.5 rounded-lg bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 border border-[#FFD60A]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all"
                  >
                    🛡️ Host Private
@@ -147,25 +194,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        {/* Ticker */}
-        <div className="border-t border-wz-red/20 bg-[#FFD60A] py-1.5 overflow-hidden shadow-[0_5px_20px_rgba(255,214,10,0.15)] relative">
-          <div className="absolute top-0 left-0 bottom-0 w-12 bg-gradient-to-r from-[#FFD60A] to-transparent z-10" />
-          <div className="absolute top-0 right-0 bottom-0 w-12 bg-gradient-to-l from-[#FFD60A] to-transparent z-10" />
-          <div className="marquee-container">
-            <div className="marquee-content font-mono font-black text-[10px] md:text-xs tracking-widest text-black uppercase">
-              <span className="mx-8">⚠️ CLUELESS_FAN99 LOST 500 PTS</span>
-              <span className="mx-8">🔥 DHONI_GOAT ON A 5-DAY STREAK</span>
-              <span className="mx-8">⚔️ RCB ARMY OVERTOOK MI IN LEADERBOARD</span>
-              <span className="mx-8">💀 ROAST BY @VIRAT_STAN WENT VIRAL (2K UPVOTES)</span>
-              <span className="mx-8">🚨 NEW SEASON LOOT CRATES AVAILABLE</span>
-              <span className="mx-8">⚠️ CLUELESS_FAN99 LOST 500 PTS</span>
-              <span className="mx-8">🔥 DHONI_GOAT ON A 5-DAY STREAK</span>
-              <span className="mx-8">⚔️ RCB ARMY OVERTOOK MI IN LEADERBOARD</span>
-              <span className="mx-8">💀 ROAST BY @VIRAT_STAN WENT VIRAL (2K UPVOTES)</span>
-              <span className="mx-8">🚨 NEW SEASON LOOT CRATES AVAILABLE</span>
-            </div>
-          </div>
-        </div>
       </header>
 
       {/* ══════════════════ CONTENT ══════════════════ */}
@@ -175,37 +203,6 @@ export default function DashboardPage() {
           {/* Main Column */}
           <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
             
-            {/* ────── SEASON BANNER ────── */}
-            <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className={section}>
-              <div className="flex flex-col md:flex-row gap-4 mb-2">
-                <div className="flex-1 rounded-2xl p-4 md:p-5 flex items-center justify-between bg-gradient-to-r from-wz-red/20 to-[#FF6B2C]/10 border border-wz-red/30 relative overflow-hidden group cursor-pointer shadow-[0_0_20px_rgba(255,45,85,0.1)]">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-wz-red/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-                  <div className="relative z-10">
-                    <span className="inline-block bg-wz-red text-white text-[9px] font-bold px-2 py-0.5 rounded ml-0.5 mb-1.5 tracking-widest uppercase">Season 1 Active</span>
-                    <h2 className="text-white font-display font-black text-xl md:text-2xl">IPL Warzone</h2>
-                    <p className="text-white/60 text-[10px] md:text-xs font-mono mt-1">Ends in 45 Days · Rank reset pending</p>
-                  </div>
-                  <div className="shrink-0 text-center relative z-10">
-                    <div className="w-12 h-12 md:w-14 md:h-14 bg-black/40 rounded-xl flex items-center justify-center border border-white/20 group-hover:scale-110 group-hover:border-wz-red/50 transition-all mx-auto">
-                      <span className="text-2xl md:text-3xl">🎁</span>
-                    </div>
-                    <span className="text-[9px] md:text-[10px] font-bold text-wz-red mt-1.5 block tracking-wider uppercase">Loot Crate</span>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl p-4 flex flex-col items-center justify-center bg-white/[0.03] border border-white/10 text-center cursor-pointer hover:bg-white/[0.05] transition-colors md:w-40 shrink-0">
-                  <div className="flex items-end gap-1 mb-1">
-                    <span className="text-2xl md:text-3xl animate-bounce" style={{ animationDuration: '2s' }}>🔥</span>
-                    <span className="text-white font-display font-black text-2xl md:text-3xl leading-none">5</span>
-                  </div>
-                  <span className="text-[#FFD60A] text-[9px] font-mono font-bold tracking-widest uppercase">Day Streak</span>
-                  <button className="mt-2 text-[9px] bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 px-3 py-1 rounded w-full border border-[#FFD60A]/20 transition-colors font-bold uppercase tracking-wider">
-                    Claim +50 🪙
-                  </button>
-                </div>
-              </div>
-            </motion.section>
-
             {/* ────── HERO CARD ────── */}
             <motion.section initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className={`${section} relative`}>
               <div onMouseMove={handleCardMouse} onMouseLeave={handleCardLeave} className="perspective-[1200px] w-full cursor-pointer">
@@ -240,11 +237,11 @@ export default function DashboardPage() {
 
             {/* ────── QUICK ACTIONS ────── */}
             <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className={section}>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 {([
+                  { icon: '🎁', label: 'Claim', desc: 'Daily Reward', color: '#B026FF', go: () => claimDailyRewardMut.mutate() },
                   { icon: '⚔️', label: 'War Room', desc: 'Join the fight', color: '#FF2D55', go: () => navigate('/live') },
-                  { icon: '🔥', label: 'Roasts', desc: 'Trending burns', color: '#FF6B2C', go: () => navigate('/roasts') },
-                  { icon: '🛡️', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { matches.length ? setShowCreateBunker(matches[0].id) : alert('No live matches!'); } },
+                  { icon: '🛡️', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); } },
                   { icon: '🔗', label: 'Join', desc: 'Enter Room Code', color: '#00FF88', go: () => setShowJoinBunker(true) },
                 ] as const).map((a) => (
                   <motion.button key={a.label} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} onClick={a.go}
@@ -295,110 +292,108 @@ export default function DashboardPage() {
               <div className={sectionHead}>
                 <div className="flex items-center gap-2">
                   <div className="live-dot" />
-                  <h2 className={sectionTitle}>Live Battlegrounds</h2>
+                  <h2 className={sectionTitle}>🔴 Live Battlegrounds</h2>
                 </div>
-                <button onClick={() => navigate('/live')} className={`${sectionLink} text-[#FF2D55]`}>View All →</button>
               </div>
 
-              {matchesLoading ? (
-                <div className="space-y-3">{[1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-white/[0.02] animate-pulse" />)}</div>
-              ) : matches.length === 0 ? (
-                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-12 md:py-16 text-center">
-                  <motion.p animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 3 }} className="text-4xl mb-3">🏟️</motion.p>
-                  <p className="text-white/40 text-base md:text-lg font-display font-bold">The Arena is Quiet</p>
-                  <p className="text-white/20 text-xs font-mono mt-2">No live matches right now. Prepare yourselves.</p>
+              {liveMatches.length === 0 ? (
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-8 text-center">
+                  <p className="text-white/40 text-sm font-display font-bold">The Arena is Quiet</p>
+                  <p className="text-white/20 text-xs font-mono mt-1">No live matches right now.</p>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Spotlight Match */}
-                  {matches.slice(0, 1).map((m: any) => {
-                    const hc = m.homeArmy.colorHex || TEAM_COLORS[m.homeArmy.name] || '#FF2D55';
-                    const ac = m.awayArmy.colorHex || TEAM_COLORS[m.awayArmy.name] || '#007AFF';
-                    const isLive = m.status === 'LIVE';
+                  {liveMatches.map((m: IPLMatch) => {
+                    const hc = TEAM_COLORS[m.homeTeam] || '#FF2D55';
+                    const ac = TEAM_COLORS[m.awayTeam] || '#007AFF';
 
                     return (
-                      <div key={m.id} onClick={() => isLive ? navigate(`/war-room/${m.warRoomId || m.id}`) : null} 
-                        className={`group block ${isLive ? 'cursor-pointer' : 'cursor-default'}`}>
+                      <div key={m.id} onClick={() => navigate(`/war-room/${m.id}`)} className="group block cursor-pointer">
                         <div className="flex items-center justify-between mb-2.5 px-2">
-                           <span className="font-display font-black text-[22px] md:text-3xl tracking-tight" style={{ color: hc, textShadow: `0 0 15px ${hc}40` }}>{m.homeArmy.name}</span>
+                           <span className="font-display font-black text-[22px] md:text-3xl tracking-tight" style={{ color: hc, textShadow: `0 0 15px ${hc}40` }}>{m.homeTeam}</span>
                            <div className="flex flex-col items-center">
-                             <div className={isLive ? "live-dot mb-1" : "w-2 h-2 rounded-full bg-white/20 mb-1"} />
-                             <span className="text-[9px] md:text-[10px] font-mono font-bold text-white/40 tracking-[0.3em] uppercase">
-                               {isLive ? 'Tug of War' : 'Commencing In'}
-                             </span>
+                             <div className="live-dot mb-1" />
+                             <span className="text-[9px] md:text-[10px] font-mono font-bold text-white/40 tracking-[0.3em] uppercase">Tug of War</span>
                            </div>
-                           <span className="font-display font-black text-[22px] md:text-3xl tracking-tight text-right" style={{ color: ac, textShadow: `0 0 15px ${ac}40` }}>{m.awayArmy.name}</span>
+                           <span className="font-display font-black text-[22px] md:text-3xl tracking-tight text-right" style={{ color: ac, textShadow: `0 0 15px ${ac}40` }}>{m.awayTeam}</span>
                         </div>
                         
-                        <div className={`h-14 md:h-20 w-full rounded-2xl overflow-hidden flex relative border-2 shadow-[0_20px_40px_rgba(0,0,0,0.5)] transition-all ${isLive ? 'group-hover:shadow-[0_20px_60px_rgba(0,0,0,0.8)] border-white/10' : 'border-white/5 bg-white/[0.02]'}`}>
+                        <div className="h-14 md:h-20 w-full rounded-2xl overflow-hidden flex relative border-2 shadow-[0_20px_40px_rgba(0,0,0,0.5)] transition-all group-hover:shadow-[0_20px_60px_rgba(0,0,0,0.8)] border-white/10">
                            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay z-10 pointer-events-none"></div>
                            
-                           {isLive ? (
-                             <>
-                               <motion.div initial={{ width: '50%' }} animate={{ width: '65%' }} transition={{ duration: 1.5, type: 'spring', bounce: 0.4 }} className="h-full flex items-center px-4 relative overflow-hidden" style={{ background: `linear-gradient(90deg, ${hc}E6, ${hc})` }}>
-                                 <img src={`/teams/${m.homeArmy.name.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-14 md:h-14 object-contain absolute left-3 opacity-30 mix-blend-plus-lighter" />
-                                 <span className="font-mono font-black text-xs md:text-sm text-black ml-auto z-20">65%</span>
-                               </motion.div>
-                               <div className="h-full bg-white w-1.5 z-20 shadow-[0_0_20px_#fff] relative">
-                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white rotate-45"></div>
-                               </div>
-                               <div className="h-full flex-1 flex items-center justify-start px-4 relative overflow-hidden" style={{ background: `linear-gradient(270deg, ${ac}E6, ${ac})` }}>
-                                 <span className="font-mono font-black text-xs md:text-sm text-black mr-auto z-20 relative">35%</span>
-                                 <img src={`/teams/${m.awayArmy.name.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-14 md:h-14 object-contain absolute right-3 opacity-30 mix-blend-plus-lighter" />
-                               </div>
-                             </>
-                           ) : (
-                             <div className="flex-1 flex items-center justify-center bg-gradient-to-r from-white/5 via-white/[0.08] to-white/5">
-                                <div className="text-center group-hover:scale-105 transition-transform">
-                                  <div className="text-xl md:text-2xl font-display font-black text-white tracking-widest italic glow-text">
-                                    <MatchCountdown startTime={m.startTime} />
-                                  </div>
-                                </div>
-                             </div>
-                           )}
+                           {(() => {
+                             const score = viewerData?.toxicity?.[`match-${m.id}`] || viewerData?.toxicity?.[m.id.toString()] || { homeScore: 50, awayScore: 50 };
+                             const defaultHomeScore = score.homeScore ?? 50;
+                             const defaultAwayScore = score.awayScore ?? 50;
+                             const totalScore = defaultHomeScore + defaultAwayScore;
+                             const homePct = totalScore === 0 ? 50 : (defaultHomeScore / totalScore) * 100;
+                             const awayPct = totalScore === 0 ? 50 : (defaultAwayScore / totalScore) * 100;
+
+                             return (
+                               <>
+                                 <motion.div initial={{ width: '50%' }} animate={{ width: `${homePct}%` }} transition={{ duration: 1.5, type: 'spring', bounce: 0.4 }} className="h-full flex items-center px-4 relative overflow-hidden" style={{ background: `linear-gradient(90deg, ${hc}E6, ${hc})` }}>
+                                   <img src={`/teams/${m.homeTeam.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-14 md:h-14 object-contain absolute left-3 opacity-30 mix-blend-plus-lighter" />
+                                   <span className="font-mono font-black text-xs md:text-sm text-black ml-auto z-20">{Math.round(homePct)}%</span>
+                                 </motion.div>
+                                 <div className="h-full bg-white w-1.5 z-20 shadow-[0_0_20px_#fff] relative">
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white rotate-45"></div>
+                                 </div>
+                                 <div className="h-full flex-1 flex items-center justify-start px-4 relative overflow-hidden" style={{ background: `linear-gradient(270deg, ${ac}E6, ${ac})` }}>
+                                   <span className="font-mono font-black text-xs md:text-sm text-black mr-auto z-20 relative">{Math.round(awayPct)}%</span>
+                                   <img src={`/teams/${m.awayTeam.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-14 md:h-14 object-contain absolute right-3 opacity-30 mix-blend-plus-lighter" />
+                                 </div>
+                               </>
+                             );
+                           })()}
                         </div>
                         <div className="text-center mt-3">
-                           {isLive ? (
-                             <span className="inline-block bg-wz-red/10 text-wz-red px-3 py-1 rounded-full text-[10px] md:text-xs font-mono font-bold border border-wz-red/30 group-hover:bg-wz-red group-hover:text-white transition-colors uppercase tracking-widest hover:scale-105">Join Real-Time Battle →</span>
-                           ) : (
-                             <span className="inline-block text-white/20 text-[9px] md:text-[10px] font-mono font-bold uppercase tracking-[0.2em]">Deploying to frontlines at {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                           )}
+                           <span className="inline-block bg-wz-red/10 text-wz-red px-3 py-1 rounded-full text-[10px] md:text-xs font-mono font-bold border border-wz-red/30 group-hover:bg-wz-red group-hover:text-white transition-colors uppercase tracking-widest hover:scale-105">Join Real-Time Battle →</span>
                         </div>
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </motion.section>
 
-                  {/* Secondary Matches */}
-                  {matches.slice(1, 4).map((m: any, i: number) => {
-                    const hc = m.homeArmy.colorHex || TEAM_COLORS[m.homeArmy.name] || '#FF2D55';
-                    const ac = m.awayArmy.colorHex || TEAM_COLORS[m.awayArmy.name] || '#007AFF';
-                    const isLive = m.status === 'LIVE';
+            {/* ────── UPCOMING BATTLEGROUNDS ────── */}
+            <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className={section}>
+              <div className={sectionHead}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⏳</span>
+                  <h2 className={sectionTitle}>Upcoming Battlegrounds</h2>
+                </div>
+              </div>
+
+              {upcomingMatches.length === 0 ? (
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-6 text-center">
+                  <p className="text-white/20 text-xs font-mono">No upcoming matches scheduled.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingMatches.slice(0, 3).map((m: IPLMatch, i: number) => {
+                    const hc = TEAM_COLORS[m.homeTeam] || '#FF2D55';
+                    const ac = TEAM_COLORS[m.awayTeam] || '#007AFF';
 
                     return (
-                      <motion.div key={m.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.16 + i * 0.06 }}
-                        onClick={() => isLive ? navigate(`/war-room/${m.warRoomId || m.id}`) : null}
-                        className={`flex items-center gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.15] transition-all group shadow-lg shadow-black/20 ${isLive ? 'cursor-pointer' : 'cursor-default'}`}>
+                      <motion.div key={m.id} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.06 }}
+                        className="flex items-center gap-3 md:gap-4 p-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] relative overflow-hidden">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <img src={`/teams/${m.homeArmy.name.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-contain p-1.5" style={{ background: `${hc}15`, border: `1px solid ${hc}25` }} />
-                          <span className="font-display font-bold text-base md:text-lg text-white truncate">{m.homeArmy.name}</span>
+                          <img src={`/teams/${m.homeTeam.toLowerCase()}.png`} alt="" className="w-8 h-8 md:w-10 md:h-10 rounded-xl object-contain p-1" style={{ background: `${hc}15`, border: `1px solid ${hc}25` }} />
+                          <span className="font-display font-bold text-sm md:text-base text-white truncate">{m.homeTeam}</span>
                         </div>
-                        <div className="flex flex-col items-center shrink-0 mx-2">
-                           {isLive ? (
-                             <>
-                               <span className="text-[10px] md:text-xs font-display font-black text-white/20">VS</span>
-                               <div className="live-dot mt-1" />
-                             </>
-                           ) : (
-                             <span className="text-[9px] font-mono font-bold text-wz-yellow/40 uppercase tracking-widest">
-                               {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                             </span>
-                           )}
+                        <div className="flex flex-col items-center shrink-0 mx-2 text-center">
+                           <span className="text-[10px] font-mono font-bold text-[#FFD60A] uppercase tracking-widest mb-1 shadow-[0_0_10px_rgba(255,214,10,0.5)] bg-[#FFD60A]/10 px-2 py-0.5 rounded">
+                             <MatchCountdown startTime={m.datetime} />
+                           </span>
+                           <span className="text-[8px] font-mono text-white/30 uppercase tracking-widest">
+                             {new Date(m.datetime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                           </span>
                         </div>
                         <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
-                          <span className="font-display font-bold text-base md:text-lg text-white truncate text-right">{m.awayArmy.name}</span>
-                          <img src={`/teams/${m.awayArmy.name.toLowerCase()}.png`} alt="" className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-contain p-1.5" style={{ background: `${ac}15`, border: `1px solid ${ac}25` }} />
+                          <span className="font-display font-bold text-sm md:text-base text-white truncate text-right">{m.awayTeam}</span>
+                          <img src={`/teams/${m.awayTeam.toLowerCase()}.png`} alt="" className="w-8 h-8 md:w-10 md:h-10 rounded-xl object-contain p-1" style={{ background: `${ac}15`, border: `1px solid ${ac}25` }} />
                         </div>
-                        <motion.span whileHover={{ scale: 1.2, x: 2 }} className={`ml-2 md:ml-4 text-xl transition-all shrink-0 ${isLive ? 'text-[#FF2D55] opacity-30 group-hover:opacity-100' : 'text-white/10 opacity-0'}`}>{isLive ? '→' : ''}</motion.span>
                       </motion.div>
                     );
                   })}
@@ -406,16 +401,6 @@ export default function DashboardPage() {
               )}
             </motion.section>
 
-            {/* ────── SOCIAL CTA ────── */}
-            <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }} className={section}>
-              <div onClick={() => navigate('/posts')} className="rounded-2xl border border-[#00FF88]/20 bg-gradient-to-br from-[#00FF88]/5 to-transparent p-6 md:p-10 text-center cursor-pointer hover:border-[#00FF88]/40 transition-all group overflow-hidden relative">
-                <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay"></div>
-                <p className="text-4xl md:text-5xl mb-4">📢</p>
-                <h3 className="text-white font-display font-black text-xl md:text-2xl mb-2">Influence the War</h3>
-                <p className="text-white/40 text-[11px] md:text-sm font-mono mb-6">Post opinions · Start debates · Rally your Faction</p>
-                <WarzoneButton onClick={() => navigate('/posts')} className="mx-auto shadow-xl shadow-[#00FF88]/10">OPEN DISCUSSIONS →</WarzoneButton>
-              </div>
-            </motion.section>
           </div>
 
           {/* Sidebar Column */}
@@ -453,25 +438,6 @@ export default function DashboardPage() {
                <RoastGenerator />
             </motion.section>
 
-            {topRoasts.length > 0 && (
-              <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}>
-                <div className={sectionHead}>
-                  <h2 className={sectionTitle}>💀 Viral Roasts</h2>
-                  <button onClick={() => navigate('/roasts')} className={`${sectionLink} text-[#FF6B2C]`}>All →</button>
-                </div>
-                <div className="space-y-3">
-                  {topRoasts.map((r: any) => (
-                    <div key={r.id} className="rounded-2xl border border-white/[0.06] bg-white/[0.015] p-5">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white/30 text-[10px] md:text-xs">@{r.author?.username || 'Anon'}</span>
-                        <span className="text-[#FF6B2C] text-[10px] font-mono font-bold">🔥 {r.upvoteCount || 0}</span>
-                      </div>
-                      <p className="text-white/80 text-sm italic italic leading-relaxed line-clamp-3">"{r.content}"</p>
-                    </div>
-                  ))}
-                </div>
-              </motion.section>
-            )}
           </div>
         </div>
       </main>

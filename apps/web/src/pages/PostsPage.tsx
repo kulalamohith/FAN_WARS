@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
@@ -36,13 +37,13 @@ const TYPE_BADGES: Record<string, { emoji: string; color: string; label: string 
 export default function PostsPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const duelView = useDuelStore((s) => s.duelView);
   const viewingDuel = useDuelStore((s) => s.viewingDuel);
 
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'global' | 'mine'>('global');
   const [showCompose, setShowCompose] = useState(false);
-  const [profileUser, setProfileUser] = useState<QuickProfileUser | null>(null);
 
   // Posts feed query (for ALL and MY POSTS)
   const {
@@ -193,7 +194,7 @@ export default function PostsPage() {
                 <>
                   <div className="space-y-3">
                     {allPosts.map((post: any) => (
-                      <PostCard key={post.id} post={post} currentUserId={user?.id} onUserClick={setProfileUser} />
+                      <PostCard key={post.id} post={post} currentUserId={user?.id} onUserClick={(u) => navigate(`/profile/${u.username}`)} />
                     ))}
                   </div>
 
@@ -251,9 +252,6 @@ export default function PostsPage() {
         )}
       </AnimatePresence>
 
-      {profileUser && (
-        <QuickProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
-      )}
     </div>
   );
 }
@@ -291,6 +289,11 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
   const [userReactions, setUserReactions] = useState<string[]>(post.userReactions || []);
   const [localReactions, setLocalReactions] = useState(post.reactions);
 
+  useEffect(() => {
+    setUserReactions(post.userReactions || []);
+    setLocalReactions(post.reactions);
+  }, [post.reactions, post.userReactions]);
+
   const reactMutation = useMutation({
     mutationFn: ({ type }: { type: string }) => api.posts.react(post.id, type),
     onMutate: ({ type }) => {
@@ -301,15 +304,15 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
         setUserReactions((prev) => prev.filter((r) => r !== type));
         setLocalReactions((prev: any) => ({
           ...prev,
-          [counterKey]: Math.max(0, prev[counterKey] - 1),
-          total: Math.max(0, prev.total - 1),
+          [counterKey]: Math.max(0, (prev[counterKey] || 0) - 1),
+          total: Math.max(0, (prev.total || 0) - 1),
         }));
       } else {
         setUserReactions((prev) => [...prev, type]);
         setLocalReactions((prev: any) => ({
           ...prev,
-          [counterKey]: prev[counterKey] + 1,
-          total: prev.total + 1,
+          [counterKey]: (prev[counterKey] || 0) + 1,
+          total: (prev.total || 0) + 1,
         }));
       }
     },

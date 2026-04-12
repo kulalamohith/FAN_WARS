@@ -21,11 +21,18 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     const err = await res.json().catch(() => ({ message: 'Request failed' }));
 
     // Auto-logout on expired / invalid token
+    // BUT skip if we're already on the login page or if this is an auth request (signin/signup)
     if (res.status === 401) {
-      localStorage.removeItem('wz_token');
-      localStorage.removeItem('wz_user');
-      window.location.href = '/login';
-      throw new Error('Session expired — please log in again');
+      const isAuthEndpoint = url.startsWith('/auth/');
+      const isOnLoginPage = window.location.pathname === '/login';
+
+      if (!isAuthEndpoint && !isOnLoginPage) {
+        localStorage.removeItem('wz_token');
+        localStorage.removeItem('wz_user');
+        window.location.href = '/login';
+      }
+
+      throw new Error(err.message || 'Invalid email or password');
     }
 
     throw new Error(err.message || `HTTP ${res.status}`);
@@ -69,6 +76,7 @@ export const api = {
   matches: {
     live: (page = 1, limit = 10) =>
       request<{ matches: any[]; meta: any }>(`/matches/live?page=${page}&limit=${limit}`),
+    viewers: () => request<{ counts: Record<string, number>, toxicity: Record<string, { homeScore: number, awayScore: number }> }>('/matches/viewers'),
   },
 
   // ---- War Rooms ----
@@ -191,6 +199,10 @@ export const api = {
   profile: {
     me: () =>
       request<any>('/profile/me'),
+    dailyClaim: () =>
+      request<{ success: boolean; alreadyClaimed: boolean; pointsAwarded?: number; streakBonus?: number; streakMilestone?: string | null; totalAwarded?: number; loginStreak: number; message: string }>('/profile/daily-claim', {
+        method: 'POST',
+      }),
     user: (username: string) =>
       request<any>(`/profile/${username}`),
     search: (query: string) =>
@@ -217,6 +229,8 @@ export const api = {
 
   // ---- Duels (Sniper Duels — Global Feed) ----
   duels: {
+    stats: () => request<{ success: boolean; stats: { totalDuels: number; wins: number; losses: number; points: number } }>('/duels/stats'),
+    my: () => request<{ success: boolean; duels: any[] }>('/duels/my'),
     save: (data: {
       topicText: string;
       topicCategory: string;

@@ -53,6 +53,7 @@ model User {
   posts           Post[]
   postReactions   PostReaction[]
   userBadges      UserBadge[]
+  pointsLog       PointsLog[]
   lastLoginAt     DateTime?
   loginStreak     Int       @default(0)
 
@@ -347,4 +348,21 @@ model DuelHype {
 
   @@unique([duelId, userId])
   @@map("duel_hypes")
+}
+
+model PointsLog {
+  id        String   @id @default(uuid())
+  userId    String
+  amount    Int
+  source    String   // e.g. 'PREDICTION_CORRECT', 'DUEL_WIN', 'POST_CREATE'
+  sourceId  String?  // FK to the originating entity (predictionId, duelId, postId, etc.)
+  metadata  String?  // Optional JSON string for extra context
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, source, createdAt])
+  @@index([userId, sourceId])
+  @@map("points_log")
 }

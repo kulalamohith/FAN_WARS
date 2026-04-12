@@ -1,15 +1,17 @@
 /**
  * WARZONE — Profile Routes (/v1/profile)
  *
- * GET  /me          → Full profile with rank details, badges, stats, XP progress
- * GET  /:username   → View another user's public profile
- * POST /badges/pin  → Pin/unpin a badge on the Dog Tag (max 3 pinned)
+ * GET  /me            → Full profile with rank details, badges, stats, XP progress
+ * GET  /:username     → View another user's public profile
+ * POST /badges/pin    → Pin/unpin a badge on the Dog Tag (max 3 pinned)
+ * POST /daily-claim   → Claim daily login reward + streak bonuses
  */
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
 import { getRankInfo, getRankProgress, WARZONE_RANKS } from '../../../lib/ranks';
+import { awardPoints, POINT_VALUES } from '../../../lib/points';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pipeline } from 'stream/promises';
@@ -358,6 +360,103 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.send({ success: true, url: fileUrl });
+    }
+  );
+
+  // ═══════════════════════════════════════════════
+  //  DAILY LOGIN CLAIM  —  POST /daily-claim
+  // ═══════════════════════════════════════════════
+  fastify.post(
+    '/daily-claim',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const userId = request.user.id;
+
+      const user = await db.user.findUnique({
+        where: { id: userId },
+        select: { lastLoginAt: true, loginStreak: true },
+      });
+
+      if (!user) return reply.notFound('User not found');
+
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+
+      // Check if already claimed today
+      if (user.lastLoginAt && user.lastLoginAt >= todayStart) {
+        return reply.send({
+          success: false,
+          alreadyClaimed: true,
+          loginStreak: user.loginStreak,
+          message: 'Daily reward already claimed today.',
+        });
+      }
+
+      // Determine streak continuity
+      let newStreak: number;
+      if (user.lastLoginAt && user.lastLoginAt >= yesterdayStart) {
+        // Logged in yesterday — continue streak
+        newStreak = user.loginStreak + 1;
+      } else {
+        // Streak broken or first login — start at 1
+        newStreak = 1;
+      }
+
+      // Award base daily login points
+      let totalAwarded = 0;
+      const dailyResult = await awardPoints(userId, POINT_VALUES.DAILY_LOGIN, 'DAILY_LOGIN', `daily_${todayStart.toISOString()}`);
+      if (dailyResult.awarded) totalAwarded += dailyResult.amount;
+
+      // Check streak milestones and award bonus
+      let streakBonus = 0;
+      let streakMilestone: string | null = null;
+
+      const STREAK_MILESTONES: { day: number; bonus: number; label: string }[] = [
+        { day: 3, bonus: POINT_VALUES.STREAK_3, label: '3-Day Streak 🔥' },
+        { day: 7, bonus: POINT_VALUES.STREAK_7, label: '7-Day Streak 🔥🔥' },
+        { day: 14, bonus: POINT_VALUES.STREAK_14, label: '14-Day Streak 🔥🔥🔥' },
+        { day: 30, bonus: POINT_VALUES.STREAK_30, label: '30-Day Streak 👑' },
+      ];
+
+      for (const milestone of STREAK_MILESTONES) {
+        if (newStreak === milestone.day) {
+          const bonusResult = await awardPoints(
+            userId,
+            milestone.bonus,
+            'STREAK_BONUS',
+            `streak_${milestone.day}_${todayStart.toISOString()}`
+          );
+          if (bonusResult.awarded) {
+            streakBonus = milestone.bonus;
+            streakMilestone = milestone.label;
+            totalAwarded += bonusResult.amount;
+          }
+          break;
+        }
+      }
+
+      // Update user login tracking
+      await db.user.update({
+        where: { id: userId },
+        data: {
+          lastLoginAt: now,
+          loginStreak: newStreak,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        alreadyClaimed: false,
+        pointsAwarded: POINT_VALUES.DAILY_LOGIN,
+        streakBonus,
+        streakMilestone,
+        totalAwarded,
+        loginStreak: newStreak,
+        message: streakMilestone
+          ? `+${totalAwarded} WP! ${streakMilestone} bonus!`
+          : `+${POINT_VALUES.DAILY_LOGIN} WP — Day ${newStreak} streak!`,
+      });
     }
   );
 };

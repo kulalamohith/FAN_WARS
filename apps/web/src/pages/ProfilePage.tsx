@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import WarzoneButton from '../components/ui/WarzoneButton';
 import { RankBadge } from '../components/ui/RankBadge';
+import { getArmyTheme } from '../lib/theme';
 import { ShareCard } from '../components/ui/ShareCard';
 import BadgeCard from '../components/ui/BadgeCard';
 import { EditProfileModal } from '../components/ui/EditProfileModal';
@@ -37,27 +38,13 @@ const fadeUp = {
   }),
 };
 
-const getArmyTheme = (armyName: string = '', fallbackColor: string) => {
-  const n = armyName.toUpperCase();
-  // Using radial gradients to create an atmospheric, team-colored background
-  if (n.includes('RCB') || n.includes('ROYAL')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #2a0000 0%, #000 100%)', color: '#E51837', secondary: '#000000' };
-  if (n.includes('MI') || n.includes('MUMBAI')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #001f3f 0%, #000 100%)', color: '#004B8D', secondary: '#002244' };
-  if (n.includes('LSG') || n.includes('LUCKNOW')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #2e1a1a 0%, #000 100%)', color: '#8B4513', secondary: '#4A2511' };
-  if (n.includes('PBKS') || n.includes('PUNJAB')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #2e0808 0%, #000 100%)', color: '#ED1B24', secondary: '#5C0B0E' };
-  if (n.includes('CSK') || n.includes('CHENNAI')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #2a2500 0%, #000 100%)', color: '#F9CD05', secondary: '#5A4A00' };
-  if (n.includes('SRH') || n.includes('SUNRISERS')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #331400 0%, #000 100%)', color: '#FF822A', secondary: '#663300' };
-  if (n.includes('DC') || n.includes('DELHI')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #001033 0%, #000 100%)', color: '#00008B', secondary: '#8B0000' }; // DC gets blue radial background, red accents
-  if (n.includes('GT') || n.includes('GUJARAT')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #110e24 0%, #000 100%)', color: '#1B2133', secondary: '#0A0D1A' };
-  if (n.includes('KKR') || n.includes('KOLKATA')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #1a0033 0%, #000 100%)', color: '#3A225D', secondary: '#110A1C' };
-  if (n.includes('RR') || n.includes('RAJASTHAN')) return { bgGradient: 'radial-gradient(circle at 50% 0%, #33001a 0%, #000 100%)', color: '#EA1A85', secondary: '#001D48' };
 
-  return { bgGradient: `radial-gradient(circle at 50% 0%, ${fallbackColor}15 0%, #000 100%)`, color: fallbackColor, secondary: fallbackColor };
-};
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const { username: paramUsername } = useParams<{ username?: string }>();
   const queryClient = useQueryClient();
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [isSharing, setIsSharing] = useState(false);
@@ -65,9 +52,12 @@ export default function ProfilePage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
 
+  // Determine if viewing own profile or another user's
+  const isOwnProfile = !paramUsername || paramUsername === user?.username;
+
   const { data: profile, isLoading } = useQuery({
-    queryKey: ['profile-me'],
-    queryFn: () => api.profile.me(),
+    queryKey: isOwnProfile ? ['profile-me'] : ['profile-user', paramUsername],
+    queryFn: () => isOwnProfile ? api.profile.me() : api.profile.user(paramUsername!),
     refetchInterval: 15000,
   });
 
@@ -103,6 +93,7 @@ export default function ProfilePage() {
     setIsSharing(false);
   };
 
+  const profileUsername = isOwnProfile ? user?.username : (profile?.user?.username || paramUsername);
   const pinnedBadges = profile?.badges?.filter((b: any) => b.isPinned) || [];
   const earnedBadges = profile?.badges?.filter((b: any) => b.earned) || [];
   const rankColor = profile?.rank?.color || '#6B7280';
@@ -146,14 +137,24 @@ export default function ProfilePage() {
         {/* Subtle glow orb */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-full blur-[100px] opacity-30" style={{ backgroundColor: armyColor }} />
         
-        {/* LOGOUT BUTTON TOP RIGHT */}
-        <div className="absolute top-6 right-6 z-20">
-          <button
-            onClick={() => { logout(); navigate('/login'); }}
-            className="px-4 py-1.5 rounded-full bg-black/40 text-white/50 hover:text-red-400 hover:bg-black/80 text-[10px] font-mono font-bold transition-all duration-200 border border-white/10"
-          >
-            LOGOUT
-          </button>
+        {/* BACK BUTTON / LOGOUT */}
+        <div className="absolute top-6 right-6 z-20 flex gap-2">
+          {!isOwnProfile && (
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-1.5 rounded-full bg-black/40 text-white/50 hover:text-white hover:bg-black/80 text-[10px] font-mono font-bold transition-all duration-200 border border-white/10"
+            >
+              ← BACK
+            </button>
+          )}
+          {isOwnProfile && (
+            <button
+              onClick={() => { logout(); navigate('/login'); }}
+              className="px-4 py-1.5 rounded-full bg-black/40 text-white/50 hover:text-red-400 hover:bg-black/80 text-[10px] font-mono font-bold transition-all duration-200 border border-white/10"
+            >
+              LOGOUT
+            </button>
+          )}
         </div>
       </div>
 
@@ -174,7 +175,7 @@ export default function ProfilePage() {
                 {profile?.user?.profilePictureUrl ? (
                   <img src={profile.user.profilePictureUrl} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                  user?.username?.charAt(0).toUpperCase() || '?'
+                  profileUsername?.charAt(0).toUpperCase() || '?'
                 )}
               </div>
               <div 
@@ -185,30 +186,32 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ACTION BUTTONS */}
-            <div className="flex gap-3 mb-2 translate-y-2">
-              <WarzoneButton 
-                variant="ghost" 
-                className="px-5 py-2 h-auto text-[11px] rounded-xl flex items-center gap-2 border border-white/10 bg-white/5 backdrop-blur-lg hover:bg-white/10 hover:border-white/30 text-white font-bold shadow-[0_8px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 transition-all duration-300" 
-                onClick={() => setIsEditOpen(true)}
-              >
-                 <Edit3Icon className="w-3.5 h-3.5" /> Edit Mode
-              </WarzoneButton>
-              <WarzoneButton 
-                variant="ghost" 
-                className="px-5 py-2 h-auto text-[11px] rounded-xl flex items-center gap-2 border border-white/10 bg-white/5 backdrop-blur-lg hover:bg-white/10 hover:border-white/30 text-white font-bold shadow-[0_8px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 transition-all duration-300" 
-                onClick={handleShareCard} 
-                disabled={isSharing}
-              >
-                 <CameraIcon className="w-3.5 h-3.5" /> {isSharing ? 'Gen...' : 'Share Tag'}
-              </WarzoneButton>
-            </div>
+            {/* ACTION BUTTONS — only for own profile */}
+            {isOwnProfile && (
+              <div className="flex gap-3 mb-2 translate-y-2">
+                <WarzoneButton 
+                  variant="ghost" 
+                  className="px-5 py-2 h-auto text-[11px] rounded-xl flex items-center gap-2 border border-white/10 bg-white/5 backdrop-blur-lg hover:bg-white/10 hover:border-white/30 text-white font-bold shadow-[0_8px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 transition-all duration-300" 
+                  onClick={() => setIsEditOpen(true)}
+                >
+                   <Edit3Icon className="w-3.5 h-3.5" /> Edit Mode
+                </WarzoneButton>
+                <WarzoneButton 
+                  variant="ghost" 
+                  className="px-5 py-2 h-auto text-[11px] rounded-xl flex items-center gap-2 border border-white/10 bg-white/5 backdrop-blur-lg hover:bg-white/10 hover:border-white/30 text-white font-bold shadow-[0_8px_16px_rgba(0,0,0,0.4)] hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 transition-all duration-300" 
+                  onClick={handleShareCard} 
+                  disabled={isSharing}
+                >
+                   <CameraIcon className="w-3.5 h-3.5" /> {isSharing ? 'Gen...' : 'Share Tag'}
+                </WarzoneButton>
+              </div>
+            )}
           </div>
 
           {/* NAME, RANK & ARMY */}
           <div className="mt-4">
             <h1 className="flex items-center flex-wrap gap-2 text-3xl font-display font-black tracking-tight leading-none mb-1">
-              {user?.username || 'Warrior'}
+              {profileUsername || 'Warrior'}
               {earnedBadges.slice(0, 4).map((b: any) => (
                 <span key={b.key} className="text-xl" title={b.name}>{b.icon}</span>
               ))}

@@ -43,7 +43,7 @@ interface WarRoomState {
   kickedUserId: string | null;
   
   // Actions
-  connect: (matchId: string) => void;
+  connect: (matchId: string, userId?: string) => void;
   disconnect: () => void;
   sendMessage: (payload: { matchId: string; text: string; userId: string; username: string; rank: string; armyId: string; isHomeArmy: boolean }) => void;
   sendReaction: (payload: { matchId: string; type: string }) => void;
@@ -72,7 +72,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   isBunkerEnded: false,
   kickedUserId: null,
 
-  connect: (matchId: string) => {
+  connect: (matchId: string, userId?: string) => {
     // Prevent multiple connections
     if (get().socket) return;
 
@@ -87,7 +87,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
 
     socket.on('connect', () => {
       set({ isConnected: true });
-      socket.emit('join_war_room', matchId);
+      socket.emit('join_war_room', { matchId, userId });
       // If a bunker join was queued before socket connected, send it now
       const pending = get().pendingBunkerId;
       if (pending) {
@@ -97,6 +97,10 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
 
     socket.on('disconnect', () => {
       set({ isConnected: false });
+    });
+
+    socket.on('chat_history', (history: ChatMessage[]) => {
+      set({ messages: history });
     });
 
     socket.on('chat_message', (msg: ChatMessage) => {
@@ -138,6 +142,10 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     });
 
     // Handle bunker messages
+    socket.on('bunker_chat_history', (history: ChatMessage[]) => {
+      set({ bunkerMessages: history });
+    });
+
     socket.on('bunker_message', (msg: ChatMessage) => {
       set((state) => {
         const newMessages = [...state.bunkerMessages, msg];

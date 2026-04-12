@@ -6,6 +6,35 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
+import { awardPoints, POINT_VALUES } from '../../../lib/points';
+
+/**
+ * Lazy verdict resolver: checks if a duel's voting period has ended
+ * and determines/awards the winner if not already resolved.
+ */
+async function resolveDuelVerdict(duel: any): Promise<void> {
+  if (duel.status !== 'voting') return;
+  if (!duel.verdictAt || new Date() < new Date(duel.verdictAt)) return;
+
+  // Determine winner by community votes
+  let winnerId: string | null = null;
+  if (duel.player1Votes > duel.player2Votes) {
+    winnerId = duel.player1Id;
+  } else if (duel.player2Votes > duel.player1Votes) {
+    winnerId = duel.player2Id;
+  }
+  // If tied, no winner — no bonus awarded
+
+  await db.sniperDuel.update({
+    where: { id: duel.id },
+    data: { status: 'completed', winnerId },
+  });
+
+  // Award win bonus to the winner
+  if (winnerId) {
+    await awardPoints(winnerId, POINT_VALUES.DUEL_WIN_BONUS, 'DUEL_WIN_BONUS', duel.id);
+  }
+}
 
 export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
 
@@ -65,6 +94,9 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
         return { success: true, duel: { id: existing.id }, deduplicated: true };
       }
 
+      // Award participation points to both players immediately
+      // (done before create to use sourceId = generated duel id)
+
       const duel = await db.sniperDuel.create({
         data: {
           topicText,
@@ -84,6 +116,10 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
           verdictAt: new Date(now.getTime() + oneDay),
         },
       });
+
+      // Award participation points to both players
+      await awardPoints(player1.id, POINT_VALUES.DUEL_PARTICIPATE, 'DUEL_PARTICIPATE', duel.id);
+      await awardPoints(player2.id, POINT_VALUES.DUEL_PARTICIPATE, 'DUEL_PARTICIPATE', duel.id);
 
       return { success: true, duel: { id: duel.id } };
     },
@@ -122,6 +158,11 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
           hypes: { where: { userId }, select: { id: true } },
         },
       });
+
+      // Lazy verdict resolution: resolve any duels whose voting period has ended
+      for (const d of duels) {
+        await resolveDuelVerdict(d);
+      }
 
       const mapped = duels.map((d) => ({
         id: d.id,
@@ -198,6 +239,10 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
           db.duelVote.create({ data: { duelId: id, userId, votedFor } }),
           db.sniperDuel.update({ where: { id }, data: { [field]: { increment: 1 } } }),
         ]);
+
+        // Award points for voting on a duel
+        await awardPoints(userId, POINT_VALUES.DUEL_VOTE, 'DUEL_VOTE', `${id}_${userId}`);
+
         return { action: 'added', votedFor };
       }
     },
@@ -234,5 +279,83 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
         return { action: 'added', hyped: true };
       }
     },
+  );
+
+  // ─── GET: User's Duel Stats ───
+  fastify.get(
+    '/stats',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const userId = request.user.id;
+
+      const totalDuels = await db.sniperDuel.count({
+        where: {
+          OR: [{ player1Id: userId }, { player2Id: userId }]
+        }
+      });
+
+      const wins = await db.sniperDuel.count({
+        where: { winnerId: userId }
+      });
+
+      const points = (wins * 150) + ((totalDuels - wins) * 50);
+
+      return reply.send({
+        success: true,
+        stats: {
+          totalDuels,
+          wins,
+          losses: totalDuels - wins,      
+          points
+        }
+      });
+    }
+  );
+
+  // ─── GET: User's My Duels ───
+  fastify.get(
+    '/my',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const userId = request.user.id;
+      
+      const duels = await db.sniperDuel.findMany({
+        where: {
+          OR: [{ player1Id: userId }, { player2Id: userId }]
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          votes: { where: { userId } },
+          hypes: { where: { userId } },
+        }
+      });
+
+      const mapped = duels.map(duel => {
+        let myVote = null;
+        if (duel.votes.length > 0) myVote = duel.votes[0].votedFor;
+
+        return {
+          id: duel.id,
+          topic: { id: duel.id, title: 'Contextual Clash', text: duel.topicText, category: duel.topicCategory },
+          player1: { id: duel.player1Id, username: duel.player1Name, army: duel.player1Army, armyColor: duel.player1Color },
+          player2: { id: duel.player2Id, username: duel.player2Name, army: duel.player2Army, armyColor: duel.player2Color },
+          messages: JSON.parse(duel.messages),
+          status: duel.status,
+          startedAt: duel.startedAt.getTime(),
+          endedAt: duel.endedAt?.getTime() || null,
+          verdictAt: duel.verdictAt?.getTime() || null,
+          player1Votes: duel.player1Votes,
+          player2Votes: duel.player2Votes,
+          hypeCount: duel.hypeCount,
+          winner: duel.winnerId,
+          myVote,
+          myHype: duel.hypes.length > 0,
+          isReal: true
+        };
+      });
+
+      return reply.send({ success: true, duels: mapped });
+    }
   );
 };

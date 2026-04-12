@@ -269,7 +269,7 @@ export const useDuelStore = create<DuelState>((set, get) => ({
   startRealDuel: (payload, currentUser) => {
     const duel: Duel = {
       id: payload.duelId,
-      topic: { id: 'custom', title: 'Contextual Clash', text: payload.topicText, category: 'hot-take' },
+      topic: { id: 'custom', side1Label: 'FOR', side2Label: 'AGAINST', text: payload.topicText, category: 'hot-take' },
       player1: currentUser,
       player2: { id: payload.opponentId, username: payload.opponentName, army: 'Rival', armyColor: '#FFD60A' },
       messages: [],

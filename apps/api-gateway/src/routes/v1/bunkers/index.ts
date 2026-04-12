@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
+import { awardPoints, POINT_VALUES } from '../../../lib/points';
 
 const createBunkerSchema = z.object({
   name: z.string().min(3).max(50),
@@ -53,6 +54,9 @@ export const bunkersRoutes: FastifyPluginAsync = async (fastify) => {
         }
       });
 
+      // Award points for creating a bunker (capped 2/day)
+      await awardPoints(request.user.id, POINT_VALUES.BUNKER_CREATE, 'BUNKER_CREATE', bunker.id);
+
       return reply.code(201).send({ success: true, bunker });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -89,6 +93,9 @@ export const bunkersRoutes: FastifyPluginAsync = async (fastify) => {
             userId: request.user.id
           }
         });
+
+        // Award points for joining a bunker (capped 3/day)
+        await awardPoints(request.user.id, POINT_VALUES.BUNKER_JOIN, 'BUNKER_JOIN', bunker.id);
       } catch (err: any) {
         // If unique constraint fails, they are already in the bunker, which is fine
         if (err.code !== 'P2002') {

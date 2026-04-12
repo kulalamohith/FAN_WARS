@@ -5,6 +5,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
+import { awardPoints, batchAwardPoints, POINT_VALUES } from '../../../lib/points';
 
 export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   const paramsSchema = z.object({
@@ -62,13 +63,10 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Check if expired
       if (new Date() > prediction.expiresAt) {
-        // We technically should auto-close this, but for now just reject
         return reply.badRequest('Prediction time has expired');
       }
 
       // 2. Prevent Double Voting
-      // We rely on the UNIQUE constraint in the DB to prevent race conditions,
-      // but we do a fast check here for better UX error messages.
       const existingVote = await db.predictionLedger.findUnique({
         where: {
           unique_user_prediction: {
@@ -89,7 +87,7 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
             userId,
             predictionId,
             selectedOption,
-            clientIp: request.ip // Fastify captures IP (needs trustProxy behind reverse proxy)
+            clientIp: request.ip
           }
         });
 
@@ -99,7 +97,6 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
       } catch (err: any) {
-        // Handle Prisma Unique Constraint Violation (P2002) race condition
         if (err.code === 'P2002') {
           return reply.conflict('You have already voted on this prediction');
         }
@@ -109,7 +106,6 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // --- POST Trigger Prediction (/v1/predictions/trigger/:matchId) ---
-  // In a real app, this would be protected by an admin/system token.
   fastify.post(
     '/trigger/:matchId',
     async (request, reply) => {
@@ -123,12 +119,12 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
       const { questionText, optionA, optionB, pointsReward, durationMs } = parsedBody.data;
 
       // Handle demo mode matches (hardcoded in frontend schedule)
-      // 1. Ensure Match exists (even for demo matches like 'match-1')
       let match = await db.match.findUnique({ where: { id: matchId } });
+      let isDemo = false;
       
       if (!match) {
         if (matchId.startsWith('match-')) {
-          // Create placeholder match for demo/testing
+          isDemo = true;
           const armies = await db.army.findMany({ take: 2 });
           if (armies.length < 2) return reply.internalServerError('Not enough armies seeded to create demo match');
           
@@ -184,7 +180,6 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // --- POST Resolve Prediction (/v1/predictions/:id/resolve) ---
-  // In a real app, protected by admin root API keys
   fastify.post(
     '/:id/resolve',
     async (request, reply) => {
@@ -223,34 +218,61 @@ export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       });
 
-      const userIdsToReward = correctVotes.map(v => v.userId);
+      // 4. Find all wrong votes
+      const wrongVotes = await db.predictionLedger.findMany({
+        where: {
+          predictionId,
+          selectedOption: { not: correctOption }
+        }
+      });
 
-      // 4. Issue the War Points via Transaction to ensure ledger sync
-      if (userIdsToReward.length > 0) {
-        await db.$transaction([
-          // Update the users' total points
-          db.user.updateMany({
-            where: { id: { in: userIdsToReward } },
-            data: {
-              totalWarPoints: { increment: prediction.pointsReward }
-            }
-          }),
-          // Mark the ledger that these specfic votes were awarded points
-          db.predictionLedger.updateMany({
-            where: {
-              predictionId,
-              selectedOption: correctOption
-            },
-            data: {
-              pointsAwarded: prediction.pointsReward
-            }
-          })
-        ]);
+      // 5. Award points to correct voters via centralized engine
+      const correctUserIds = correctVotes.map(v => v.userId);
+      const correctResult = await batchAwardPoints(
+        correctUserIds,
+        prediction.pointsReward,
+        'PREDICTION_CORRECT',
+        predictionId
+      );
+
+      // Mark the ledger entries with the points awarded
+      if (correctUserIds.length > 0) {
+        await db.predictionLedger.updateMany({
+          where: {
+            predictionId,
+            selectedOption: correctOption
+          },
+          data: {
+            pointsAwarded: prediction.pointsReward
+          }
+        });
+      }
+
+      // 6. Award participation points to wrong voters (+10)
+      const wrongUserIds = wrongVotes.map(v => v.userId);
+      const wrongResult = await batchAwardPoints(
+        wrongUserIds,
+        POINT_VALUES.PREDICTION_WRONG,
+        'PREDICTION_WRONG',
+        predictionId
+      );
+
+      // Mark wrong ledger entries too
+      if (wrongUserIds.length > 0) {
+        await db.predictionLedger.updateMany({
+          where: {
+            predictionId,
+            selectedOption: { not: correctOption }
+          },
+          data: {
+            pointsAwarded: POINT_VALUES.PREDICTION_WRONG
+          }
+        });
       }
 
       return reply.send({
         success: true,
-        message: `Prediction resolved. Awarded ${prediction.pointsReward} WP to ${userIdsToReward.length} warriors.`
+        message: `Prediction resolved. Awarded ${prediction.pointsReward} WP to ${correctResult.awarded} correct warriors, +${POINT_VALUES.PREDICTION_WRONG} WP to ${wrongResult.awarded} participants.`
       });
     }
   );

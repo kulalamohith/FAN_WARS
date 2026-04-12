@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { Server, Socket } from 'socket.io';
 import fp from 'fastify-plugin';
+import { awardPoints, POINT_VALUES } from '../lib/points';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -24,13 +25,12 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
 
   fastify.decorate('io', io);
 
-  // In-memory store for toxicity scores per room
-  // Key: matchId, Value: { homeScore: number, awayScore: number }
   const toxicityScores: Record<string, { homeScore: number; awayScore: number }> = {};
-
-  // Reaction Storm aggregator
-  // Key: matchId, Value: { count: number, timers: NodeJS.Timeout[] }
   const reactionAggregators: Record<string, { count: number; timers: NodeJS.Timeout[] }> = {};
+  const chatHistories: Record<string, any[]> = {};
+  const bunkerChatHistories: Record<string, any[]> = {};
+  const roomVisitors: Record<string, Set<string>> = {};
+  fastify.decorate('roomVisitors', roomVisitors);
 
   const POSITIVE_WORDS = ['win', 'king', 'fire', 'best', 'goat', 'smash', 'destroy', 'crazy', '🔥', '👑'];
   const NEGATIVE_WORDS = ['choke', 'lose', 'fail', 'trash', 'worst', 'bad', 'finished', 'cry', '💀', '🤡'];
@@ -57,10 +57,25 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     fastify.log.info(`[Socket.IO] Client connected: ${socket.id}`);
 
     // Allow clients to join a specific War Room by Match ID
-    socket.on('join_war_room', (matchId: string) => {
+    socket.on('join_war_room', (data: string | { matchId: string; userId?: string }) => {
+      let matchId = '';
+      let userId = '';
+      if (typeof data === 'string') {
+        matchId = data;
+        userId = `guest_${socket.id}`;
+      } else {
+        matchId = data.matchId;
+        userId = data.userId || `guest_${socket.id}`;
+      }
+
       socket.join(`room_${matchId}`);
       fastify.log.info(`[Socket.IO] Client ${socket.id} joined room_${matchId}`);
       
+      if (!roomVisitors[matchId]) {
+        roomVisitors[matchId] = new Set();
+      }
+      roomVisitors[matchId].add(userId);
+
       // Initialize room score if it doesn't exist
       if (!toxicityScores[matchId]) {
         toxicityScores[matchId] = { homeScore: 50, awayScore: 50 };
@@ -68,6 +83,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
       
       // Send current score immediately to the joining client
       socket.emit('toxicity_update', toxicityScores[matchId]);
+
+      // Send recent chat history
+      if (chatHistories[matchId]) {
+        socket.emit('chat_history', chatHistories[matchId]);
+      }
     });
 
     // Leave room
@@ -90,6 +110,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         text,
         timestamp: new Date().toISOString(),
       };
+
+      if (!chatHistories[matchId]) chatHistories[matchId] = [];
+      chatHistories[matchId].push(payload);
+      if (chatHistories[matchId].length > 100) chatHistories[matchId].shift();
+
       io.to(`room_${matchId}`).emit('chat_message', payload);
 
       // 2. Process Toxicity (Sentiment Engine)
@@ -110,6 +135,12 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         // 3. Broadcast new toxicity
         io.to(`room_${matchId}`).emit('toxicity_update', scores);
       }
+
+      // 4. Award chat participation points (+2, fire-and-forget)
+      if (userId && userId !== 'admin') {
+        awardPoints(userId, POINT_VALUES.CHAT_MESSAGE, 'CHAT_MESSAGE', `chat_${matchId}_${userId}_${Date.now()}`)
+          .catch(err => fastify.log.error(err, 'Failed to award chat points'));
+      }
     });
 
     // --- 🛡️ PRIVATE BUNKERS SYSTEM 🛡️ ---
@@ -117,6 +148,10 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     socket.on('join_bunker', (bunkerId: string) => {
       socket.join(`bunker_${bunkerId}`);
       fastify.log.info(`[Socket.IO] Client ${socket.id} joined bunker_${bunkerId}`);
+
+      if (bunkerChatHistories[bunkerId]) {
+        socket.emit('bunker_chat_history', bunkerChatHistories[bunkerId]);
+      }
     });
 
     // Leave a private bunker room
@@ -139,6 +174,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         text,
         timestamp: new Date().toISOString(),
       };
+      
+      if (!bunkerChatHistories[bunkerId]) bunkerChatHistories[bunkerId] = [];
+      bunkerChatHistories[bunkerId].push(payload);
+      if (bunkerChatHistories[bunkerId].length > 100) bunkerChatHistories[bunkerId].shift();
+
       io.to(`bunker_${bunkerId}`).emit('bunker_message', payload);
     });
 
@@ -147,6 +187,15 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     socket.on('reaction', (data: { matchId: string; type: string }) => {
       const { matchId, type } = data;
       io.to(`room_${matchId}`).emit('live_reaction', { type });
+    });
+
+    // --- 💪 TUG-OF-WAR TAPS 💪 ---
+    socket.on('tug_tap', (data: { matchId: string; userId: string; side: 'home' | 'away' }) => {
+      const { matchId, userId } = data;
+      if (userId && userId !== 'admin') {
+        awardPoints(userId, POINT_VALUES.TUG_OF_WAR_TAP, 'TUG_OF_WAR_TAP', `tug_${matchId}_${userId}_${Date.now()}`)
+          .catch(err => fastify.log.error(err, 'Failed to award tug tap points'));
+      }
     });
 
     // --- 🎯 GLOBAL CONTEXTUAL SNIPER DUELS 🎯 ---
@@ -189,7 +238,12 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
 
     // Decline duel challenge
     socket.on('decline_duel_challenge', (data: { challengerId: string }) => {
-      io.to(`user_${data.challengerId}`).emit('duel_challenge_declined');
+      io.to(`user_${data.challengerId}`).emit('duel_challenge_declined', { targetUserId: socket.id });
+    });
+
+    // Cancel (withdraw) a sent duel challenge
+    socket.on('cancel_duel_challenge', (data: { targetUserId: string }) => {
+      io.to(`user_${data.targetUserId}`).emit('duel_challenge_cancelled', { challengerId: socket.id });
     });
 
     // Join Duel Room
@@ -210,6 +264,12 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
 
     socket.on('disconnect', () => {
       fastify.log.info(`[Socket.IO] Client disconnected: ${socket.id}`);
+      const guestId = `guest_${socket.id}`;
+      for (const visitors of Object.values(roomVisitors)) {
+        if (visitors.has(guestId)) {
+          visitors.delete(guestId);
+        }
+      }
     });
   });
 };

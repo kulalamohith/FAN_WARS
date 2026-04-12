@@ -122,6 +122,12 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { email } = parsed.data;
 
+    // Check if user already exists — block early to prevent useless OTP flow
+    const existingUser = await db.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return reply.conflict('An account with this email already exists. Please sign in instead.');
+    }
+
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 

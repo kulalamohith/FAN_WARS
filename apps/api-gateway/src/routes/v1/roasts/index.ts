@@ -6,6 +6,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
+import { awardPoints, POINT_VALUES } from '../../../lib/points';
 
 const LEGENDARY_THRESHOLD = 50; // Upvotes to become legendary
 
@@ -107,6 +108,9 @@ export const roastsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Award points for creating a roast (capped 3/day)
+      await awardPoints(userId, POINT_VALUES.ROAST_CREATE, 'ROAST_CREATE', roast.id);
+
       return reply.code(201).send({
         success: true,
         roast: {
@@ -173,6 +177,11 @@ export const roastsRoutes: FastifyPluginAsync = async (fastify) => {
             },
           }),
         ]);
+
+        // Award +3 to roast author for receiving an upvote (capped 100/day)
+        if (roast.userId !== userId) {
+          await awardPoints(roast.userId, POINT_VALUES.ROAST_UPVOTE_RECEIVED, 'ROAST_UPVOTE_RECEIVED', `${roastId}_${userId}`);
+        }
 
         return reply.send({
           success: true,

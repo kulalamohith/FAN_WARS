@@ -63,7 +63,7 @@ export default function DuelInviteModal({ isOpen, onClose, defaultSearch = '', d
   function handleConfirm() {
     if (!selectedOpponent || !selectedTopic || !user) return;
 
-    sendChallenge(selectedOpponent.id, user.username, selectedTopic.text, user.id);
+    sendChallenge(selectedOpponent.id, selectedOpponent.username, user.username, selectedTopic.text, user.id);
     
     // Auto-close modal after challenge is sent
     handleClose();

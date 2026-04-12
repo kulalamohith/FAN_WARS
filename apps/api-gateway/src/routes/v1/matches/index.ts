@@ -14,6 +14,20 @@ export const matchesRoutes: FastifyPluginAsync = async (fastify) => {
     limit: z.coerce.number().min(1).max(50).default(10),
   });
 
+  // --- GET Match Viewer Counts (/v1/matches/viewers) ---
+  fastify.get('/viewers', async (request, reply) => {
+    // @ts-ignore
+    const visitors: Record<string, Set<string>> = fastify.roomVisitors || {};
+    // @ts-ignore
+    const toxicityScores: Record<string, any> = fastify.toxicityScores || {};
+    
+    const counts: Record<string, number> = {};
+    for (const [id, set] of Object.entries(visitors)) {
+      counts[id] = set.size;
+    }
+    return reply.send({ counts, toxicity: toxicityScores });
+  });
+
   // --- GET Live Matches (/v1/matches/live) ---
   fastify.get(
     '/live',

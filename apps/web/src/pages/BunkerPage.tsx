@@ -437,7 +437,7 @@ export default function BunkerPage() {
                     {showHeader && !isMe && (
                       <div className="flex items-center gap-1.5 mb-1 pl-1 w-full">
                         <button
-                          onClick={() => setProfileUser({ id: msg.userId, username: msg.username, rank: msg.rank as string || 'RECRUIT', armyName: msg.armyId || 'N/A' })}
+                          onClick={() => navigate(`/profile/${msg.username}`)}
                           className="text-white/80 font-bold text-xs hover:underline cursor-pointer"
                         >
                           {msg.username}

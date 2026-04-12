@@ -7,6 +7,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
+import { awardPoints, POINT_VALUES } from '../../../lib/points';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pipeline } from 'stream/promises';
@@ -192,6 +193,9 @@ export const postsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Award points for creating a post (capped 5/day)
+      await awardPoints(userId, POINT_VALUES.POST_CREATE, 'POST_CREATE', post.id);
+
       return reply.status(201).send({
         success: true,
         post: {
@@ -200,7 +204,7 @@ export const postsRoutes: FastifyPluginAsync = async (fastify) => {
           imageUrl: post.imageUrl,
           type: post.type,
           author: post.user,
-          reactions: { fire: 0, roast: 0, disagree: 0, legend: 0, total: 0 },
+          reactions: { fire: 0, clown: 0, toxic: 0, laugh: 0, total: 0 },
           userReactions: [],
           createdAt: post.createdAt.toISOString(),
         },
@@ -251,6 +255,14 @@ export const postsRoutes: FastifyPluginAsync = async (fastify) => {
           db.postReaction.create({ data: { postId: id, userId, type } }),
           db.post.update({ where: { id }, data: { [counterField]: { increment: 1 } } }),
         ]);
+
+        // Award +1 to the person reacting (capped 20/day)
+        await awardPoints(userId, POINT_VALUES.REACT_TO_POST, 'REACT_TO_POST', `${id}_${type}`);
+
+        // Award +2 to the post author for receiving a reaction (no self-react rewards)
+        if (post.userId !== userId) {
+          await awardPoints(post.userId, POINT_VALUES.POST_REACTION_RECEIVED, 'POST_REACTION_RECEIVED', `${id}_${userId}_${type}`);
+        }
 
         return { action: 'added', type };
       }
