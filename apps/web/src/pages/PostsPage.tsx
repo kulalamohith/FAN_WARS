@@ -12,6 +12,7 @@ import { useDuelStore } from '../stores/duelStore';
 import DuelPostCard from '../components/features/duels/DuelPostCard';
 import DuelReadView from '../components/features/duels/DuelReadView';
 import QuickProfileModal, { QuickProfileUser } from '../components/ui/QuickProfileModal';
+import DuelInviteModal from '../components/features/duels/DuelInviteModal';
 
 // ─── Feed Tabs ───
 const FEED_TABS = [
@@ -288,6 +289,7 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
   const queryClient = useQueryClient();
   const [userReactions, setUserReactions] = useState<string[]>(post.userReactions || []);
   const [localReactions, setLocalReactions] = useState(post.reactions);
+  const [challengeUser, setChallengeUser] = useState<any | null>(null);
 
   useEffect(() => {
     setUserReactions(post.userReactions || []);
@@ -363,6 +365,23 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
               >
                 {post.author?.username}
               </button>
+              {currentUserId && post.author?.id !== currentUserId && (
+                <button 
+                  onClick={() => setChallengeUser({
+                    id: post.author?.id,
+                    username: post.author?.username,
+                    army: post.author?.army?.name || 'Unknown',
+                    armyColor: post.author?.army?.colorHex || '#FFFFFF',
+                    rank: post.author?.rank || 'Recruit',
+                    wins: 0,
+                    losses: 0,
+                  })}
+                  className="ml-1 px-1.5 py-0.5 border border-[#FF6B2C]/50 rounded bg-[#FF6B2C]/10 text-[#FF6B2C] hover:text-white text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#FF6B2C]/50 transition-colors"
+                  title={`Challenge ${post.author?.username} to Sniper Duel`}
+                >
+                  [1v1 SD]
+                </button>
+              )}
               <span
                 className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border"
                 style={{ color: post.author?.army?.colorHex, borderColor: `${post.author?.army?.colorHex}40` }}
@@ -456,6 +475,14 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
           );
         })}
       </div>
+
+      {challengeUser && (
+        <DuelInviteModal
+          isOpen={true}
+          defaultOpponent={challengeUser}
+          onClose={() => setChallengeUser(null)}
+        />
+      )}
     </motion.div>
   );
 }

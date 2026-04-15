@@ -31,6 +31,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
   const bunkerChatHistories: Record<string, any[]> = {};
   const roomVisitors: Record<string, Set<string>> = {};
   fastify.decorate('roomVisitors', roomVisitors);
+  fastify.decorate('toxicityScores', toxicityScores);
 
   const POSITIVE_WORDS = ['win', 'king', 'fire', 'best', 'goat', 'smash', 'destroy', 'crazy', '🔥', '👑'];
   const NEGATIVE_WORDS = ['choke', 'lose', 'fail', 'trash', 'worst', 'bad', 'finished', 'cry', '💀', '🤡'];
@@ -191,7 +192,24 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
 
     // --- 💪 TUG-OF-WAR TAPS 💪 ---
     socket.on('tug_tap', (data: { matchId: string; userId: string; side: 'home' | 'away' }) => {
-      const { matchId, userId } = data;
+      const { matchId, userId, side } = data;
+      
+      // Update toxicity scores based on tap
+      if (!toxicityScores[matchId]) {
+        toxicityScores[matchId] = { homeScore: 50, awayScore: 50 };
+      }
+      const scores = toxicityScores[matchId];
+      if (side === 'home') {
+        scores.homeScore = Math.min(95, scores.homeScore + 1);
+        scores.awayScore = 100 - scores.homeScore;
+      } else {
+        scores.awayScore = Math.min(95, scores.awayScore + 1);
+        scores.homeScore = 100 - scores.awayScore;
+      }
+      
+      // Broadcast updated scores to all clients in the room
+      io.to(`room_${matchId}`).emit('toxicity_update', scores);
+      
       if (userId && userId !== 'admin') {
         awardPoints(userId, POINT_VALUES.TUG_OF_WAR_TAP, 'TUG_OF_WAR_TAP', `tug_${matchId}_${userId}_${Date.now()}`)
           .catch(err => fastify.log.error(err, 'Failed to award tug tap points'));

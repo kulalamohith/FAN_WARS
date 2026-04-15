@@ -35,22 +35,36 @@ export default function WarRoomPage() {
 
   const [showSoundboard, setShowSoundboard] = useState(false);
   const [showSniperDuel, setShowSniperDuel] = useState(false);
-  const [towScore, setTowScore] = useState(50);
   
   const [votedChaos, setVotedChaos] = useState(false);
   const [votedChaosOption, setVotedChaosOption] = useState<'A'|'B'>();
 
   const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
+  const [myMsgReactions, setMyMsgReactions] = useState<Record<string, Set<string>>>({}); // track per-message which types I reacted to
   const [challengerMsg, setChallengerMsg] = useState<any | null>(null);
 
 
   const handleMsgReact = (msgId: string, type: 'toxic' | 'fire' | 'clown') => {
+    const alreadyReacted = myMsgReactions[msgId]?.has(type) || false;
+    
+    // Update my reactions tracking
+    setMyMsgReactions(prev => {
+      const existing = new Set(prev[msgId] || []);
+      if (alreadyReacted) {
+        existing.delete(type);
+      } else {
+        existing.add(type);
+      }
+      return { ...prev, [msgId]: existing };
+    });
+
+    // Update the reaction counts
     setMessageReactions(prev => ({
       ...prev,
       [msgId]: {
-        toxic: (prev[msgId]?.toxic || 0) + (type === 'toxic' ? 1 : 0),
-        fire: (prev[msgId]?.fire || 0) + (type === 'fire' ? 1 : 0),
-        clown: (prev[msgId]?.clown || 0) + (type === 'clown' ? 1 : 0),
+        toxic: (prev[msgId]?.toxic || 0) + (type === 'toxic' ? (alreadyReacted ? -1 : 1) : 0),
+        fire: (prev[msgId]?.fire || 0) + (type === 'fire' ? (alreadyReacted ? -1 : 1) : 0),
+        clown: (prev[msgId]?.clown || 0) + (type === 'clown' ? (alreadyReacted ? -1 : 1) : 0),
       }
     }));
   };
@@ -282,8 +296,14 @@ export default function WarRoomPage() {
             awayLabel={room?.toxicity?.awayArmyId || 'AWAY'}
             homeColor="#00FF88"
             awayColor="#FF2D55"
-            homeScore={towScore}
-            onTap={(side) => setTowScore(s => side === 'home' ? Math.min(95, s + 1) : Math.max(5, s - 1))}
+            homeScore={toxicityHome}
+            onTap={(side) => {
+              // Emit tug tap via WebSocket — backend updates scores and broadcasts to all clients
+              const { socket } = useWarRoomStore.getState();
+              if (socket && isConnected) {
+                socket.emit('tug_tap', { matchId: matchId, userId: user?.id, side });
+              }
+            }}
             userSide={user?.favoriteArmyId === room?.toxicity?.homeArmyId ? 'home' : 'away'}
           />
         </div>
@@ -435,14 +455,14 @@ export default function WarRoomPage() {
                     
                     {/* Reactions Block */}
                     <div className="flex items-center gap-1.5 mt-0.5 w-full">
-                      <button onClick={() => handleMsgReact(msg.id, 'toxic')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                        ☠️ <span className={messageReactions[msg.id]?.toxic ? 'text-white' : ''}>{messageReactions[msg.id]?.toxic || 0}</span>
+                      <button onClick={() => handleMsgReact(msg.id, 'toxic')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('toxic') ? 'bg-[#00FF88]/15 border-[#00FF88]/40 text-[#00FF88]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        ☠️ <span>{messageReactions[msg.id]?.toxic || 0}</span>
                       </button>
-                      <button onClick={() => handleMsgReact(msg.id, 'fire')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                        🔥 <span className={messageReactions[msg.id]?.fire ? 'text-white' : ''}>{messageReactions[msg.id]?.fire || 0}</span>
+                      <button onClick={() => handleMsgReact(msg.id, 'fire')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('fire') ? 'bg-[#FF6B2C]/15 border-[#FF6B2C]/40 text-[#FF6B2C]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        🔥 <span>{messageReactions[msg.id]?.fire || 0}</span>
                       </button>
-                      <button onClick={() => handleMsgReact(msg.id, 'clown')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                        🤡 <span className={messageReactions[msg.id]?.clown ? 'text-white' : ''}>{messageReactions[msg.id]?.clown || 0}</span>
+                      <button onClick={() => handleMsgReact(msg.id, 'clown')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('clown') ? 'bg-[#FFD60A]/15 border-[#FFD60A]/40 text-[#FFD60A]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        🤡 <span>{messageReactions[msg.id]?.clown || 0}</span>
                       </button>
                     </div>
                   </motion.div>

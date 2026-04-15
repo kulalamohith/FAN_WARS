@@ -413,8 +413,8 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-white/[0.06] overflow-hidden bg-white/[0.015]">
                 {topArmies.map((army: any, i: number) => {
                   const c = army.colorHex || TEAM_COLORS[army.name] || '#888';
-                  const pts = Number(army.totalPoints || 0);
-                  const max = Number(topArmies[0]?.totalPoints || 1);
+                  const pts = Number(army.totalWarPoints || army.totalPoints || 0);
+                  const max = Number(topArmies[0]?.totalWarPoints || topArmies[0]?.totalPoints || 1);
                   return (
                     <div key={army.id} className={`flex items-center gap-3 px-4 py-3.5 ${i < topArmies.length - 1 ? 'border-b border-white/[0.04]' : ''}`}>
                       <span className="w-6 text-center text-base">{['🥇', '🥈', '🥉'][i] || i + 1}</span>
