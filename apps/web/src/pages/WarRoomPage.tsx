@@ -207,17 +207,17 @@ export default function WarRoomPage() {
     );
   }
 
-  const getStormEmoji = (type: string | null) => {
+  const getStormEmoji = (type: string | null, sizeClass = "w-8 h-8") => {
     switch (type) {
-      case 'fire': return '🔥';
-      case 'laugh': return '😂';
-      case 'rage': return '😤';
+      case 'fire': return <img src="/fire-logo.png" className={`${sizeClass} object-contain`} alt="fire" />;
+      case 'laugh': return <img src="/laugh-logo.png" className={`${sizeClass} object-contain`} alt="laugh" />;
+      case 'rage': return <img src="/toxic-logo.png" className={`${sizeClass} object-contain`} alt="rage" />;
+      case 'skull': return <img src="/toxic-logo.png" className={`${sizeClass} object-contain`} alt="skull" />;
       case 'heart': return '❤️';
       case 'clap': return '👏';
-      case 'skull': return '💀';
       case 'crown': return '👑';
       case 'mindblown': return '🤯';
-      default: return '🔥';
+      default: return <img src="/fire-logo.png" className={`${sizeClass} object-contain`} alt="fire" />;
     }
   };
 
@@ -238,9 +238,9 @@ export default function WarRoomPage() {
                 animate={{ opacity: [0, 1, 1, 0], scale: [0.5, 1.2, 1], y: '-20vh', x: `calc(${startX} + ${swayX}px)` }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 2.5 + Math.random(), ease: 'easeOut' }}
-                className="absolute bottom-0 text-4xl drop-shadow-lg"
+                className="absolute bottom-0 drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]"
               >
-                {getStormEmoji(reaction.type)}
+                {getStormEmoji(reaction.type, "w-20 h-20")}
               </motion.div>
             );
           })}
@@ -453,16 +453,15 @@ export default function WarRoomPage() {
                     </div>
                     <span className="text-wz-text/90 inline-block mb-1">{msg.text}</span>
                     
-                    {/* Reactions Block */}
                     <div className="flex items-center gap-1.5 mt-0.5 w-full">
-                      <button onClick={() => handleMsgReact(msg.id, 'toxic')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('toxic') ? 'bg-[#00FF88]/15 border-[#00FF88]/40 text-[#00FF88]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
-                        ☠️ <span>{messageReactions[msg.id]?.toxic || 0}</span>
+                      <button title="Toxic" onClick={() => handleMsgReact(msg.id, 'toxic')} className={`flex items-center gap-1.5 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('toxic') ? 'bg-[#00FF88]/15 border-[#00FF88]/40 text-[#00FF88]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        <img src="/toxic-logo.png" alt="toxic" className="w-3.5 h-3.5 object-contain" /> <span>{messageReactions[msg.id]?.toxic || 0}</span>
                       </button>
-                      <button onClick={() => handleMsgReact(msg.id, 'fire')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('fire') ? 'bg-[#FF6B2C]/15 border-[#FF6B2C]/40 text-[#FF6B2C]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
-                        🔥 <span>{messageReactions[msg.id]?.fire || 0}</span>
+                      <button title="Fire" onClick={() => handleMsgReact(msg.id, 'fire')} className={`flex items-center gap-1.5 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('fire') ? 'bg-[#FF6B2C]/15 border-[#FF6B2C]/40 text-[#FF6B2C]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        <img src="/fire-logo.png" alt="fire" className="w-3.5 h-3.5 object-contain" /> <span>{messageReactions[msg.id]?.fire || 0}</span>
                       </button>
-                      <button onClick={() => handleMsgReact(msg.id, 'clown')} className={`flex items-center gap-1 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('clown') ? 'bg-[#FFD60A]/15 border-[#FFD60A]/40 text-[#FFD60A]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
-                        🤡 <span>{messageReactions[msg.id]?.clown || 0}</span>
+                      <button title="Clown" onClick={() => handleMsgReact(msg.id, 'clown')} className={`flex items-center gap-1.5 text-[9px] font-mono rounded px-1.5 py-0.5 border transition-colors ${myMsgReactions[msg.id]?.has('clown') ? 'bg-[#FFD60A]/15 border-[#FFD60A]/40 text-[#FFD60A]' : 'bg-black/40 hover:bg-white/10 text-white/50 border-white/5'}`}>
+                        <img src="/clown-logo.png" alt="clown" className="w-3.5 h-3.5 object-contain" /> <span>{messageReactions[msg.id]?.clown || 0}</span>
                       </button>
                     </div>
                   </motion.div>
@@ -497,6 +496,7 @@ export default function WarRoomPage() {
                 {(['fire', 'laugh', 'rage', 'heart', 'clap', 'skull', 'crown', 'mindblown'] as const).map((type) => (
                   <motion.button 
                     key={type} 
+                    title={type.charAt(0).toUpperCase() + type.slice(1)}
                     whileTap={{ scale: 0.8 }} 
                     onClick={() => sendReaction({ matchId: matchId, type })} 
                     className="flex-shrink-0 w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-base hover:bg-white/10 transition-colors"

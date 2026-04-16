@@ -75,8 +75,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                 boxShadow: `0 10px 40px ${rankColor || '#444'}60, inset 0 0 30px rgba(255,255,255,0.1)`,
                 transform: 'rotate(45deg)',
               }}>
-              <div style={{ transform: 'rotate(-45deg)' }}>
-                {rankIcon || '💀'}
+              <div style={{ transform: 'rotate(-45deg)', width: '70%', height: '70%' }}>
+                {rankIcon ? <img src={rankIcon} alt="Rank" className="w-full h-full object-contain" /> : '💀'}
               </div>
             </div>
             {/* Level Badge */}

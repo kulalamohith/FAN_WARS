@@ -239,14 +239,14 @@ export default function DashboardPage() {
             <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className={section}>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 {([
-                  { icon: '🎁', label: 'Claim', desc: 'Daily Reward', color: '#B026FF', go: () => claimDailyRewardMut.mutate() },
-                  { icon: '⚔️', label: 'War Room', desc: 'Join the fight', color: '#FF2D55', go: () => navigate('/live') },
-                  { icon: '🛡️', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); } },
-                  { icon: '🔗', label: 'Join', desc: 'Enter Room Code', color: '#00FF88', go: () => setShowJoinBunker(true) },
+                  { icon: '/claim-logo.png', label: 'Claim', desc: 'Daily Reward', color: '#B026FF', go: () => claimDailyRewardMut.mutate() },
+                  { icon: '/war-room-logo.png', label: 'War Room', desc: 'Join the fight', color: '#FF2D55', go: () => navigate('/live') },
+                  { icon: '/host-logo.png', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); } },
+                  { icon: '/join-logo.png', label: 'Join', desc: 'Enter Room Code', color: '#00FF88', go: () => setShowJoinBunker(true) },
                 ] as const).map((a) => (
                   <motion.button key={a.label} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} onClick={a.go}
                     className="flex flex-col items-start gap-2 p-4 md:p-5 rounded-2xl border border-white/[0.06] bg-white/[0.015] hover:bg-white/[0.04] transition-all cursor-pointer group text-left">
-                    <span className="text-2xl md:text-3xl mb-1 group-hover:scale-110 transition-transform origin-left">{a.icon}</span>
+                    <img src={a.icon} alt={a.label} className="w-12 h-12 md:w-14 md:h-14 mb-2 group-hover:scale-110 transition-transform origin-left object-cover rounded-xl shadow-lg border border-white/10" />
                     <div>
                       <span className="block text-xs md:text-sm font-mono font-bold tracking-wider mb-0.5" style={{ color: a.color }}>{a.label.toUpperCase()}</span>
                       <span className="block text-[10px] md:text-xs text-white/30 hidden md:block">{a.desc}</span>

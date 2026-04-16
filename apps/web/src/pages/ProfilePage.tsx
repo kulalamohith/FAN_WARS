@@ -218,7 +218,7 @@ export default function ProfilePage() {
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <span className="text-sm font-bold text-white/80 flex items-center gap-1.5">
-                {profile?.rank?.icon} {profile?.rank?.name}
+                {profile?.rank?.icon ? <img src={profile.rank.icon} alt={profile.rank.name} className="w-6 h-6 object-contain" /> : null} {profile?.rank?.name}
               </span>
               <span className="w-1 h-1 rounded-full bg-white/20" />
               <span 
@@ -264,8 +264,8 @@ export default function ProfilePage() {
         <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show" className="border-y border-white/10 py-5 my-2">
           {profile?.rank?.nextRank ? (
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl border border-white/10 text-white bg-[#111]">
-                {profile.rank.nextRank.icon}
+              <div className="w-12 h-12 p-2 rounded-xl flex items-center justify-center text-2xl border border-white/10 text-white bg-[#111]">
+                {profile.rank.nextRank.icon ? <img src={profile.rank.nextRank.icon} alt={profile.rank.nextRank.name} className="w-full h-full object-contain" /> : null}
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-end mb-1">

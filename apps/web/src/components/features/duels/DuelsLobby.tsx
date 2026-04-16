@@ -77,8 +77,13 @@ export default function DuelsLobby() {
     return () => clearInterval(interval);
   }, [feedTab]);
 
-  const feedTabs: { id: FeedTab; label: string; count: number; pulse?: boolean }[] = [
-    { id: 'live', label: '🎯 LIVE DUEL', count: activeDuels.length },
+  const feedTabs: { id: FeedTab; label: React.ReactNode; count: number; pulse?: boolean }[] = [
+    { id: 'live', label: (
+        <span className="inline-flex items-center gap-1.5">
+          <img src="/sniper-duel-logo.png" alt="Live Duel" className="w-3.5 h-3.5 object-cover rounded-[4px]" />
+          LIVE DUEL
+        </span>
+      ), count: activeDuels.length },
     { id: 'my', label: '📜 MY DUELS', count: completedDuels.length },
     { id: 'status', label: '📋 DUEL STATUS', count: statusCount, pulse: incomingChallenges.length > 0 },
   ];
@@ -111,9 +116,9 @@ export default function DuelsLobby() {
             <motion.div
               animate={{ scale: [1, 1.05, 1], rotate: [0, 2, -2, 0] }}
               transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-              className="text-5xl mb-3 inline-block"
+              className="mb-3 inline-block rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(255,45,85,0.4)] border border-white/20"
             >
-              🎯
+              <img src="/sniper-duel-logo.png" alt="Sniper Duel Logo" className="w-20 h-20 object-cover" />
             </motion.div>
             <h2 className="text-white font-display font-black text-2xl tracking-tight mb-1.5">
               SNIPER DUEL
@@ -382,13 +387,19 @@ export default function DuelsLobby() {
           >
             {displayDuels.length === 0 ? (
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-12 text-center">
-                <motion.p
+                <motion.div
                   animate={{ y: [0, -5, 0] }}
                   transition={{ repeat: Infinity, duration: 3 }}
-                  className="text-3xl mb-3"
+                  className="mb-3 flex justify-center"
                 >
-                  {feedTab === 'live' ? '🎯' : '📜'}
-                </motion.p>
+                  {feedTab === 'live' ? (
+                    <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(255,45,85,0.3)] border border-white/10">
+                      <img src="/sniper-duel-logo.png" alt="No active duels" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <span className="text-3xl">📜</span>
+                  )}
+                </motion.div>
                 <p className="text-white/30 text-sm font-display font-bold mb-1">
                   {feedTab === 'live' && 'No active duels'}
                   {feedTab === 'my' && 'No completed duels'}

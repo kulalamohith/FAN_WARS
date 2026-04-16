@@ -2,13 +2,13 @@ import { motion } from 'framer-motion';
 
 /* ─── 7 WARZONE MILITARY RANKS ─── */
 export type RankTier =
-  | 'Battle Fodder'
-  | 'Sledger Recruit'
-  | 'Chaos Corporal'
-  | 'Tug-of-War Sergeant'
-  | 'Jinxed Legionnaire'
-  | "Traitor's Bane"
-  | 'Supreme Banter Overlord';
+  | 'Loyalists'
+  | 'Warriors'
+  | 'Die hard'
+  | 'Cult'
+  | 'Fan-Tastic'
+  | 'Supremes'
+  | 'GOAT';
 
 interface RankStyle {
   bg: string;
@@ -20,13 +20,13 @@ interface RankStyle {
 }
 
 const rankStyles: Record<string, RankStyle> = {
-  'Battle Fodder':           { bg: 'bg-gray-500/10',   text: 'text-gray-400',   border: 'border-gray-500/20',   icon: '💀', glow: '',                                                    shortCode: 'BF' },
-  'Sledger Recruit':         { bg: 'bg-blue-500/10',   text: 'text-blue-400',   border: 'border-blue-500/30',   icon: '🗣️', glow: '',                                                    shortCode: 'SR' },
-  'Chaos Corporal':          { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30', icon: '🔥', glow: '',                                                    shortCode: 'CC' },
-  'Tug-of-War Sergeant':     { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/40', icon: '⚔️', glow: 'shadow-[0_0_8px_rgba(234,179,8,0.3)]',                shortCode: 'TWS' },
-  'Jinxed Legionnaire':      { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/40', icon: '🎭', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.4)]',              shortCode: 'JL' },
-  "Traitor's Bane":          { bg: 'bg-red-500/15',    text: 'text-red-400',    border: 'border-red-500/50',    icon: '🩸', glow: 'shadow-[0_0_12px_rgba(239,68,68,0.4)]',               shortCode: 'TB' },
-  'Supreme Banter Overlord': { bg: 'bg-yellow-400/15', text: 'text-yellow-300', border: 'border-yellow-400/60', icon: '👑', glow: 'shadow-[0_0_20px_rgba(255,215,0,0.5)] animate-pulse', shortCode: 'SBO' },
+  'Loyalists':  { bg: 'bg-gray-500/10',   text: 'text-gray-400',   border: 'border-gray-500/20',   icon: '/loyalists-badge.png', glow: '',                                                    shortCode: 'LOY' },
+  'Warriors':   { bg: 'bg-blue-500/10',   text: 'text-blue-400',   border: 'border-blue-500/30',   icon: '/warriors-badge.png', glow: '',                                                    shortCode: 'WAR' },
+  'Die hard':   { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30', icon: '/die-hard-badge.png', glow: '',                                                    shortCode: 'DH' },
+  'Cult':       { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/40', icon: '/cult-badge.png', glow: 'shadow-[0_0_8px_rgba(234,179,8,0.3)]',                shortCode: 'CULT' },
+  'Fan-Tastic': { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/40', icon: '/fantastic-badge.png', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.4)]',              shortCode: 'FAN' },
+  'Supremes':   { bg: 'bg-red-500/15',    text: 'text-red-400',    border: 'border-red-500/50',    icon: '/supremes-badge.png', glow: 'shadow-[0_0_12px_rgba(239,68,68,0.4)]',               shortCode: 'SUP' },
+  'GOAT':       { bg: 'bg-yellow-400/15', text: 'text-yellow-300', border: 'border-yellow-400/60', icon: '/goat-badge.png', glow: 'shadow-[0_0_20px_rgba(255,215,0,0.5)] animate-pulse', shortCode: 'GOAT' },
 };
 
 interface RankBadgeProps {
@@ -37,7 +37,7 @@ interface RankBadgeProps {
 }
 
 export const RankBadge = ({ rank, className = '', size = 'sm', animated = false }: RankBadgeProps) => {
-  const style = rankStyles[rank] || rankStyles['Battle Fodder'];
+  const style = rankStyles[rank as string] || rankStyles['Loyalists'];
 
   const sizeClasses = {
     sm: 'text-[10px] px-1.5 py-0.5 gap-1',
@@ -55,7 +55,7 @@ export const RankBadge = ({ rank, className = '', size = 'sm', animated = false 
       `}
       title={`${rank} — Level ${Object.keys(rankStyles).indexOf(rank) + 1}`}
     >
-      <span className="leading-none">{style.icon}</span>
+      <img src={style.icon} alt={rank as string} className={`rounded-sm object-contain ${size === 'sm' ? 'w-3.5 h-3.5' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'}`} />
       <span>{size === 'sm' ? style.shortCode : rank}</span>
     </span>
   );

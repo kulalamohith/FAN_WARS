@@ -23,11 +23,11 @@ const FEED_TABS = [
 
 // ─── Reactions (new) ───
 const REACTIONS = [
-  { type: 'TOXIC', emoji: '☢️', label: 'Toxic', color: '#00FF88' },
-  { type: 'CLOWN', emoji: '🤡', label: 'Clown', color: '#FFD60A' },
-  { type: 'FIRE', emoji: '🔥', label: 'Fire', color: '#FF6B2C' },
-  { type: 'LAUGH', emoji: '😂', label: 'Laugh', color: '#BF5AF2' },
-] as const;
+  { type: 'TOXIC', icon: '/toxic-logo.png', label: 'Toxic', color: '#00FF88' },
+  { type: 'CLOWN', icon: '/clown-logo.png', label: 'Clown', color: '#FFD60A' },
+  { type: 'FIRE', icon: '/fire-logo.png', label: 'Fire', color: '#FF6B2C' },
+  { type: 'LAUGH', icon: '/laugh-logo.png', label: 'Laugh', color: '#BF5AF2' },
+];
 
 const TYPE_BADGES: Record<string, { emoji: string; color: string; label: string }> = {
   OPINION: { emoji: '💬', color: '#007AFF', label: 'TAKE' },
@@ -430,11 +430,11 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
       {localReactions.total > 0 && (
         <div className="px-4 pb-2">
           <div className="flex items-center gap-1.5 text-wz-muted text-[10px] font-mono">
-            <span className="flex -space-x-1">
-              {localReactions.toxic > 0 && <span>☢️</span>}
-              {localReactions.clown > 0 && <span>🤡</span>}
-              {localReactions.fire > 0 && <span>🔥</span>}
-              {localReactions.laugh > 0 && <span>😂</span>}
+            <span className="flex items-center gap-1 -space-x-1">
+              {localReactions.toxic > 0 && <img src="/toxic-logo.png" className="w-4 h-4 rounded-full object-contain border border-white/10" alt="Toxic" />}
+              {localReactions.clown > 0 && <img src="/clown-logo.png" className="w-4 h-4 rounded-full object-contain border border-white/10" alt="Clown" />}
+              {localReactions.fire > 0 && <img src="/fire-logo.png" className="w-4 h-4 rounded-full object-contain border border-white/10" alt="Fire" />}
+              {localReactions.laugh > 0 && <img src="/laugh-logo.png" className="w-4 h-4 rounded-full object-contain border border-white/10" alt="Laugh" />}
             </span>
             <span>{localReactions.total} reactions</span>
           </div>
@@ -453,6 +453,7 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
           return (
             <button
               key={r.type}
+              title={r.label}
               onClick={() => reactMutation.mutate({ type: r.type })}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl transition-all ${
                 isActive
@@ -460,9 +461,7 @@ function PostCard({ post, currentUserId, onUserClick }: { post: any; currentUser
                   : 'hover:bg-white/5'
               }`}
             >
-              <span className={`text-sm ${isActive ? 'scale-110' : 'grayscale opacity-60'} transition-all`}>
-                {r.emoji}
-              </span>
+              <img src={r.icon} alt={r.label} className={`w-5 h-5 object-contain ${isActive ? 'scale-110 shadow-[0_0_15px_currentColor]' : 'grayscale opacity-60'} transition-all`} style={{ color: r.color }} />
               <span
                 className={`text-[10px] font-mono font-bold transition-colors ${
                   isActive ? '' : 'text-wz-muted'
