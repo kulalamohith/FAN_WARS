@@ -41,8 +41,8 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
 
   const { player1, player2, topic, status, messages, player1Votes, player2Votes, hypeCount, myHype, verdictAt, winner } = duel;
 
-  const totalVotes = player1Votes + player2Votes || 1;
-  const p1Pct = Math.round((player1Votes / totalVotes) * 100);
+  const totalVotes = player1Votes + player2Votes;
+  const p1Pct = totalVotes === 0 ? 50 : Math.round((player1Votes / totalVotes) * 100);
   const p2Pct = 100 - p1Pct;
 
   // Time remaining for verdict
@@ -130,14 +130,14 @@ export default function DuelPostCard({ duel, compact = false }: Props) {
         <div className="flex h-2 rounded-full overflow-hidden bg-white/[0.04] mb-1">
           <motion.div
             initial={{ width: '50%' }}
-            animate={{ width: `${Math.max(15, p1Pct)}%` }}
+            animate={{ width: `${totalVotes === 0 ? 50 : Math.max(15, Math.min(85, p1Pct))}%` }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="h-full rounded-l-full"
             style={{ background: player1.armyColor }}
           />
           <motion.div
             initial={{ width: '50%' }}
-            animate={{ width: `${Math.max(15, p2Pct)}%` }}
+            animate={{ width: `${totalVotes === 0 ? 50 : Math.max(15, Math.min(85, p2Pct))}%` }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="h-full rounded-r-full"
             style={{ background: player2.armyColor }}

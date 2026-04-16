@@ -97,18 +97,29 @@ export const duelsRoutes: FastifyPluginAsync = async (fastify) => {
       // Award participation points to both players immediately
       // (done before create to use sourceId = generated duel id)
 
+      // Fetch real player data to ensure army colors and names are accurate (instead of 'Rival')
+      const [u1, u2] = await Promise.all([
+        db.user.findUnique({ where: { id: player1.id }, include: { army: true } }),
+        db.user.findUnique({ where: { id: player2.id }, include: { army: true } })
+      ]);
+
+      const realPlayer1Army = u1?.army?.name || player1.army;
+      const realPlayer1Color = u1?.army?.colorHex || player1.armyColor;
+      const realPlayer2Army = u2?.army?.name || player2.army;
+      const realPlayer2Color = u2?.army?.colorHex || player2.armyColor;
+
       const duel = await db.sniperDuel.create({
         data: {
           topicText,
           topicCategory,
           player1Id: player1.id,
           player1Name: player1.username,
-          player1Army: player1.army,
-          player1Color: player1.armyColor,
+          player1Army: realPlayer1Army,
+          player1Color: realPlayer1Color,
           player2Id: player2.id,
           player2Name: player2.username,
-          player2Army: player2.army,
-          player2Color: player2.armyColor,
+          player2Army: realPlayer2Army,
+          player2Color: realPlayer2Color,
           messages: JSON.stringify(messages),
           status: 'voting',
           startedAt: startedAt ? new Date(startedAt) : now,
