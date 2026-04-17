@@ -184,6 +184,84 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // ═══════════════════════════════════════════════
+  //  TRAITOR SWITCH  —  POST /traitor-switch
+  // ═══════════════════════════════════════════════
+  const traitorSwitchSchema = z.object({
+    winningTeamName: z.string(),
+    pointsReward: z.number(),
+  });
+
+  fastify.post(
+    '/traitor-switch',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const parsed = traitorSwitchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.badRequest('Invalid payload');
+      }
+
+      const { winningTeamName, pointsReward } = parsed.data;
+      const userId = request.user.id;
+
+      // Find the winning army
+      const winningArmy = await db.army.findUnique({
+        where: { name: winningTeamName },
+      });
+
+      if (!winningArmy) {
+        return reply.notFound('Winning team not found');
+      }
+
+      // Check current user
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.notFound('User not found');
+
+      // Award the traitor points FIRST so that the subsequent update reads the new totalWarPoints
+      await awardPoints(
+        userId,
+        pointsReward,
+        'TRAITOR_SWITCH',
+        `traitor_to_${winningArmy.id}_${Date.now()}`
+      );
+
+      // Now update their army and retrieve the fully updated user object WITH the army relation included
+      const updatedUser = await db.user.update({
+        where: { id: userId },
+        data: { armyId: winningArmy.id },
+        include: { army: true },
+      });
+
+      // We must issue a new JWT token because the token contains the armyId!
+      const tokenPayload = {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        armyId: updatedUser.armyId, // New army!
+        rank: updatedUser.rank,
+        isAdmin: request.user.isAdmin,
+      };
+
+      const token = fastify.jwt.sign(tokenPayload);
+
+      return reply.send({
+        success: true,
+        message: 'Traitor protocol complete.',
+        token,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          rank: updatedUser.rank,
+          totalWarPoints: updatedUser.totalWarPoints.toString(),
+          army: {
+            id: updatedUser.army?.id,
+            name: updatedUser.army?.name,
+            colorHex: updatedUser.army?.colorHex,
+          }
+        }
+      });
+    }
+  );
+
+  // ═══════════════════════════════════════════════
   //  PUBLIC PROFILE  —  GET /:username
   // ═══════════════════════════════════════════════
   fastify.get(
@@ -306,6 +384,8 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════
   const updateProfileSchema = z.object({
     bio: z.string().max(200).optional(),
+    username: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_]+$/).optional(),
+    removeProfilePicture: z.boolean().optional(),
   });
 
   fastify.put(
@@ -314,17 +394,74 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const parsed = updateProfileSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.badRequest('Invalid payload');
+        return reply.badRequest(parsed.error.errors[0].message);
       }
 
-      const { bio } = parsed.data;
+      const { bio, username, removeProfilePicture } = parsed.data;
+      const userId = request.user.id;
+
+      // Handle Username Change
+      let newToken = null;
+      if (username && username !== request.user.username) {
+        // Check uniqueness
+        const existing = await db.user.findUnique({ where: { username } });
+        if (existing) {
+          return reply.badRequest('Username is already taken');
+        }
+
+        // Update username
+        const updatedUser = await db.user.update({
+          where: { id: userId },
+          data: { username },
+          include: { army: true }
+        });
+
+        // Issue new JWT
+        newToken = fastify.jwt.sign({
+          id: updatedUser.id,
+          username: updatedUser.username,
+          armyId: updatedUser.armyId,
+          rank: updatedUser.rank,
+          isAdmin: !!(request.user as any).isAdmin,
+        });
+      }
+
+      // Handle Profile Pic Removal
+      const updateData: any = { bio };
+      if (removeProfilePicture) {
+        updateData.profilePictureUrl = null;
+      }
+      if (username) {
+        updateData.username = username;
+      }
 
       await db.user.update({
-        where: { id: request.user.id },
-        data: { bio } as any,
+        where: { id: userId },
+        data: updateData,
       });
 
-      return reply.send({ success: true, message: 'Profile updated' });
+      return reply.send({ 
+        success: true, 
+        message: 'Profile updated', 
+        token: newToken 
+      });
+    }
+  );
+
+  // ═══════════════════════════════════════════════
+  //  POINTS HISTORY  —  GET /me/history
+  // ═══════════════════════════════════════════════
+  fastify.get(
+    '/me/history',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const history = await db.pointsLog.findMany({
+        where: { userId: request.user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
+
+      return reply.send({ success: true, history });
     }
   );
 
@@ -459,4 +596,57 @@ export const profileRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
   );
+
+  // ═══════════════════════════════════════════════
+  //  PAY ENTRY FEE — POST /pay-entry
+  // ═══════════════════════════════════════════════
+  const payEntrySchema = z.object({
+    amount: z.number().default(5),
+    source: z.string(),
+  });
+
+  fastify.post(
+    '/pay-entry',
+    { preValidation: [fastify.verifyJWT] },
+    async (request, reply) => {
+      const parsed = payEntrySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.badRequest('Invalid payload');
+      }
+
+      const userId = request.user.id;
+      const { amount, source } = parsed.data;
+
+      // Check current user points
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user) return reply.notFound('User not found');
+
+      if (Number(user.totalWarPoints) < amount) {
+        return reply.badRequest(`Insufficient War Points. You need ${amount} WP to continue.`);
+      }
+
+      // Deduct points and log
+      await db.$transaction([
+        db.user.update({
+          where: { id: userId },
+          data: { totalWarPoints: { decrement: amount } },
+        }),
+        db.pointsLog.create({
+          data: {
+            userId,
+            amount: -amount,
+            source,
+            sourceId: `entry_fee_${Date.now()}`,
+          },
+        }),
+      ]);
+
+      return reply.send({
+        success: true,
+        message: 'Entry fee paid successfully.',
+        newTotalPoints: Number(user.totalWarPoints) - amount
+      });
+    }
+  );
+
 };

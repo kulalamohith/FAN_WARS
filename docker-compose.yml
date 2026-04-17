@@ -1,6 +1,20 @@
 version: '3.8'
 
+# ═══════════════════════════════════════════════════════════
+#  FAN WARS — Production Docker Compose
+#
+#  Services:
+#    redis     - Redis 7 (Socket.IO adapter + rate limit + cache)
+#    postgres  - PostgreSQL 15 (primary datastore)
+#    api       - Fastify API Gateway (cluster mode, 2 replicas)
+#    web       - Vite frontend served by Nginx
+#    nginx     - Reverse proxy + load balancer
+# ═══════════════════════════════════════════════════════════
+
 services:
+
+  # ─── Infrastructure ─────────────────────────────────────
+
   redis:
     image: redis:7-alpine
     container_name: warzone-redis
@@ -8,7 +22,7 @@ services:
       - '6379:6379'
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -16,27 +30,87 @@ services:
       timeout: 5s
       retries: 5
 
-  # Note: PostgreSQL is included here for staging/production parity.
-  # For local MVP development on machines without Docker Desktop,
-  # the Prisma schema is currently configured to use local SQLite (dev.db).
   postgres:
     image: postgres:15-alpine
     container_name: warzone-postgres
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_USER: warzone
-      POSTGRES_PASSWORD: warzone
-      POSTGRES_DB: warzone
+      POSTGRES_USER: ${POSTGRES_USER:-warzone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-warzone}
+      POSTGRES_DB: ${POSTGRES_DB:-warzone}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U warzone"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-warzone}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ─── API Gateway (2 replicas for load balancing) ────────
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://${POSTGRES_USER:-warzone}:${POSTGRES_PASSWORD:-warzone}@postgres:5432/${POSTGRES_DB:-warzone}?connection_limit=50
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CLUSTER_WORKERS: 2
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2   # 2 container replicas × CLUSTER_WORKERS cores each
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Web Frontend ────────────────────────────────────────
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost/api/v1}
+    restart: unless-stopped
+
+  # ─── Nginx Reverse Proxy + Load Balancer ─────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: warzone-nginx
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
 volumes:
   redis_data:
   postgres_data:
+  nginx_logs:

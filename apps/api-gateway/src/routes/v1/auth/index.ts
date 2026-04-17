@@ -24,7 +24,19 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     password: z.string().min(6),
   });
 
-  fastify.post('/signin', async (request, reply) => {
+  fastify.post('/signin', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '15 minutes',
+        errorResponseBuilder: (_req: any, context: any) => ({
+          statusCode: 429,
+          error: 'Too Many Requests',
+          message: `Too many login attempts. Try again in ${Math.ceil(context.ttl / 1000)}s.`,
+        }),
+      },
+    },
+  }, async (request, reply) => {
     const parsed = signinSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.badRequest('Invalid signin payload');
@@ -114,7 +126,19 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     email: z.string().email(),
   });
 
-  fastify.post('/send-otp', async (request, reply) => {
+  fastify.post('/send-otp', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '15 minutes',
+        errorResponseBuilder: (_req: any, context: any) => ({
+          statusCode: 429,
+          error: 'Too Many Requests',
+          message: `Too many OTP requests. Try again in ${Math.ceil(context.ttl / 1000)}s.`,
+        }),
+      },
+    },
+  }, async (request, reply) => {
     const parsed = sendOtpSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.badRequest('Invalid email payload');
@@ -217,7 +241,8 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 12);
+    // Cost factor 10 = ~100ms/hash (good security vs. throughput balance)
+    const passwordHash = await bcrypt.hash(password, 10);
 
     // Create user
     const newUser = await db.user.create({
@@ -316,7 +341,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     await db.otpStore.delete({ where: { email } });
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const passwordHash = await bcrypt.hash(newPassword, 10);
 
     // Update user password
     await db.user.update({

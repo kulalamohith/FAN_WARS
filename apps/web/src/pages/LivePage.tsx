@@ -137,7 +137,7 @@ function MatchCard({
             OPENS MATCH DAY 🔒
           </button>
         ) : onClick && (
-          <button className={`px-4 py-2 rounded-xl text-white text-[10px] font-bold font-mono transition-all shrink-0 ml-2 ${isLive ? 'bg-wz-red hover:bg-[#FF453A] shadow-[0_0_15px_rgba(255,45,85,0.3)] group-hover:shadow-[0_0_20px_rgba(255,45,85,0.7)]' : 'bg-white/10 hover:bg-white/20'}`}>
+          <button onClick={(e) => { e.stopPropagation(); onClick(); }} className={`px-4 py-2 rounded-xl text-white text-[10px] font-bold font-mono transition-all shrink-0 ml-2 ${isLive ? 'bg-wz-red hover:bg-[#FF453A] shadow-[0_0_15px_rgba(255,45,85,0.3)] group-hover:shadow-[0_0_20px_rgba(255,45,85,0.7)]' : 'bg-white/10 hover:bg-white/20'}`}>
             ENTER WAR ROOM →
           </button>
         )}
@@ -148,7 +148,7 @@ function MatchCard({
 
 export default function LivePage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const [now, setNow] = useState(new Date());
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [showAllCompleted, setShowAllCompleted] = useState(false);
@@ -165,12 +165,35 @@ export default function LivePage() {
   const createBunkerMut = useMutation({
     mutationFn: (matchId: string) => api.bunkers.create(bunkerName, matchId),
     onSuccess: (r) => { setShowCreateBunker(''); setBunkerName(''); navigate(`/bunkers/${r.bunker.id}`); },
+    onError: (err: any) => alert(err.message || 'Failed to create private room'),
   });
 
   const joinBunkerMut = useMutation({
     mutationFn: () => api.bunkers.join(inviteCode),
     onSuccess: (r) => { setShowJoinBunker(false); setInviteCode(''); navigate(`/bunkers/${r.bunkerId}`); },
+    onError: (err: any) => alert(err.message || 'Failed to join private room'),
   });
+
+  const handleEntryFee = async (source: string, onSuccess: () => void) => {
+    if (Number(user?.totalWarPoints || 0) < 5) {
+      alert('Insufficient War Points. You need 5 WP to proceed.');
+      return;
+    }
+
+    try {
+      const res = await api.profile.payEntry(5, source);
+      if (res.success) {
+        if (user) {
+          setUser({ ...user, totalWarPoints: res.newTotalPoints.toString() });
+        }
+        onSuccess();
+      } else {
+        alert(res.message);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to process battle fee');
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -233,7 +256,13 @@ export default function LivePage() {
             {/* Host/Join Buttons */}
             <div className="flex items-center gap-2">
                  <button 
-                  onClick={() => { liveMatches.length ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches right now!'); }} 
+                  onClick={() => { 
+                    if (liveMatches.length) {
+                      setShowCreateBunker(liveMatches[0].id.toString());
+                    } else {
+                      alert('No live matches right now!');
+                    }
+                  }} 
                   className="px-3 py-1.5 rounded-lg bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 border border-[#FFD60A]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all shadow-[0_0_10px_rgba(255,214,10,0.1)]"
                  >
                    🛡️ Host Private
@@ -262,7 +291,7 @@ export default function LivePage() {
                   key={match.id} 
                   match={match} 
                   status="LIVE" 
-                  onClick={() => navigate(`/war-room/${match.id}`)}
+                  onClick={() => handleEntryFee('WAR_ROOM_ENTRY', () => navigate(`/war-room/${match.id}`))}
                   liveViewers={viewerData?.counts?.[`match-${match.id}`] || viewerData?.counts?.[match.id.toString()] || 0}
                 />
               ))}
@@ -316,7 +345,7 @@ export default function LivePage() {
                 key={match.id} 
                 match={match} 
                 status="UPCOMING" 
-                onClick={() => navigate(`/war-room/${match.id}`)} 
+                onClick={() => handleEntryFee('WAR_ROOM_ENTRY', () => navigate(`/war-room/${match.id}`))} 
                 liveViewers={viewerData?.counts?.[match.id.toString()] || 0}
               />
             ))}
@@ -340,7 +369,7 @@ export default function LivePage() {
           <input type="text" placeholder="Room Name" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 mb-4 outline-none text-sm" />
           <div className="flex gap-2">
             <WarzoneButton variant="ghost" fullWidth onClick={() => setShowCreateBunker('')}>Cancel</WarzoneButton>
-            <WarzoneButton fullWidth onClick={() => createBunkerMut.mutate(showCreateBunker)} disabled={bunkerName.length < 3 || createBunkerMut.isPending}>Create</WarzoneButton>
+            <WarzoneButton fullWidth onClick={() => handleEntryFee('PRIVATE_ROOM_HOST_FINAL', () => createBunkerMut.mutate(showCreateBunker))} disabled={bunkerName.length < 3 || createBunkerMut.isPending}>Create (5 WP)</WarzoneButton>
           </div>
         </Modal>
 
@@ -350,7 +379,7 @@ export default function LivePage() {
           <input type="text" placeholder="ROOM CODE" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} maxLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-[#FF2D55]/50 mb-4 outline-none uppercase text-sm" />
           <div className="flex gap-2">
             <WarzoneButton variant="ghost" fullWidth onClick={() => setShowJoinBunker(false)}>Cancel</WarzoneButton>
-            <WarzoneButton variant="danger" fullWidth onClick={() => joinBunkerMut.mutate()} disabled={inviteCode.length < 5 || joinBunkerMut.isPending}>Join</WarzoneButton>
+            <WarzoneButton variant="danger" fullWidth onClick={() => handleEntryFee('PRIVATE_ROOM_JOIN_FINAL', () => joinBunkerMut.mutate())} disabled={inviteCode.length < 5 || joinBunkerMut.isPending}>Join (5 WP)</WarzoneButton>
           </div>
         </Modal>
 

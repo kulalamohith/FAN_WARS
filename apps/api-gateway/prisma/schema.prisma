@@ -1,6 +1,3 @@
-// WARZONE - SQLite Database Schema (Local Dev)
-// Maintains parity with Pro PostgreSQL schema but using SQLite types.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,155 +8,135 @@ datasource db {
 }
 
 model Army {
-  id           String    @id @default(uuid())
-  name         String    @unique
-  colorHex     String
-  seasonScore  BigInt    @default(0)
-
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  users        User[]
-  homeMatches  Match[]   @relation("HomeArmy")
-  awayMatches  Match[]   @relation("AwayArmy")
+  id             String   @id @default(uuid())
+  name           String   @unique
+  colorHex       String
+  seasonScore    BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  awayMatches    Match[]  @relation("AwayArmy")
+  homeMatches    Match[]  @relation("HomeArmy")
   targetedRoasts Roast[]
+  users          User[]
 
   @@map("armies")
 }
 
 model User {
-  id              String    @id @default(uuid())
-  username        String    @unique
-  email           String    @unique
-  passwordHash    String?
-  armyId          String
-  rank            String    @default("Recruit")
-  totalWarPoints  BigInt    @default(0)
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
-  isActive        Boolean   @default(true)
-
-  profilePictureUrl String?
+  id                String             @id @default(uuid())
+  username          String             @unique
+  email             String             @unique
+  passwordHash      String?
+  armyId            String
+  rank              String             @default("Recruit")
+  totalWarPoints    BigInt             @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
+  isActive          Boolean            @default(true)
+  lastLoginAt       DateTime?
+  loginStreak       Int                @default(0)
   bio               String?
+  profilePictureUrl String?
+  bunkerMembers     BunkerMember[]
+  bunkersCreated    Bunker[]           @relation("BunkerCreator")
+  pointsLog         PointsLog[]
+  postReactions     PostReaction[]
+  posts             Post[]
+  ledger            PredictionLedger[]
+  roastUpvotes      RoastUpvote[]
+  roasts            Roast[]
+  userBadges        UserBadge[]
+  army              Army               @relation(fields: [armyId], references: [id])
 
-  army            Army      @relation(fields: [armyId], references: [id], onDelete: Restrict)
-  ledger          PredictionLedger[]
-  roasts          Roast[]
-  roastUpvotes    RoastUpvote[]
-  bunkersCreated  Bunker[]           @relation("BunkerCreator")
-  bunkerMembers   BunkerMember[]
-  posts           Post[]
-  postReactions   PostReaction[]
-  userBadges      UserBadge[]
-  pointsLog       PointsLog[]
-  lastLoginAt     DateTime?
-  loginStreak     Int       @default(0)
-
-  // SQLite index without unsupported sort/order constraints
   @@index([armyId])
   @@index([totalWarPoints])
   @@index([isActive, deletedAt])
-  
   @@map("users")
 }
 
 model Match {
-  id            String    @id @default(uuid())
-  homeArmyId    String
-  awayArmyId    String
-  status        String    @default("PRE")
-  startTime     DateTime
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  homeArmy      Army      @relation("HomeArmy", fields: [homeArmyId], references: [id], onDelete: Restrict)
-  awayArmy      Army      @relation("AwayArmy", fields: [awayArmyId], references: [id], onDelete: Restrict)
-  warRoom       WarRoom?
-  predictions   Prediction[]
-  bunkers       Bunker[]
+  id          String       @id @default(uuid())
+  homeArmyId  String
+  awayArmyId  String
+  status      String       @default("PRE")
+  startTime   DateTime
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+  bunkers     Bunker[]
+  awayArmy    Army         @relation("AwayArmy", fields: [awayArmyId], references: [id])
+  homeArmy    Army         @relation("HomeArmy", fields: [homeArmyId], references: [id])
+  predictions Prediction[]
+  warRoom     WarRoom?
 
   @@index([status, startTime])
   @@index([homeArmyId, awayArmyId])
-  
   @@map("matches")
 }
 
 model WarRoom {
-  id                  String    @id @default(uuid())
-  matchId             String    @unique
-  toxicityScoreHome   Int       @default(0)
-  toxicityScoreAway   Int       @default(0)
-
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  match               Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  id                String   @id @default(uuid())
+  matchId           String   @unique
+  toxicityScoreHome Int      @default(0)
+  toxicityScoreAway Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  match             Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@map("war_rooms")
 }
 
 model Prediction {
-  id             String    @id @default(uuid())
-  matchId        String
-  questionText   String
-  optionA        String
-  optionB        String
-  correctOption  String?   // "A" or "B"
-  pointsReward   Int
-  status         String    @default("ACTIVE")
-  expiresAt      DateTime
-
-  createdBy      String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  match          Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  ledger         PredictionLedger[]
+  id            String             @id @default(uuid())
+  matchId       String
+  questionText  String
+  optionA       String
+  optionB       String
+  correctOption String?
+  pointsReward  Int
+  status        String             @default("ACTIVE")
+  expiresAt     DateTime
+  createdBy     String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  deletedAt     DateTime?
+  ledger        PredictionLedger[]
+  match         Match              @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@index([matchId, status])
-  
   @@map("predictions")
 }
 
 model PredictionLedger {
-  id             String    @id @default(uuid())
+  id             String     @id @default(uuid())
   userId         String
   predictionId   String
-  selectedOption String    // "A" or "B"
-  pointsAwarded  Int       @default(0)
-
+  selectedOption String
+  pointsAwarded  Int        @default(0)
   clientIp       String?
-  createdAt      DateTime  @default(now())
-
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
   prediction     Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, predictionId], name: "unique_user_prediction")
   @@index([predictionId, selectedOption])
-  
   @@map("prediction_ledger")
 }
 
 model Roast {
-  id            String    @id @default(uuid())
-  userId        String
-  targetArmyId  String
-  content       String
-  upvoteCount   Int       @default(0)
-  isLegendary   Boolean   @default(false)
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
-
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  targetArmy    Army      @relation(fields: [targetArmyId], references: [id], onDelete: Restrict)
-  upvotes       RoastUpvote[]
+  id           String        @id @default(uuid())
+  userId       String
+  targetArmyId String
+  content      String
+  upvoteCount  Int           @default(0)
+  isLegendary  Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  upvotes      RoastUpvote[]
+  targetArmy   Army          @relation(fields: [targetArmyId], references: [id])
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([targetArmyId, upvoteCount])
   @@index([createdAt])
@@ -171,60 +148,54 @@ model RoastUpvote {
   roastId   String
   userId    String
   createdAt DateTime @default(now())
-
-  roast     Roast    @relation(fields: [roastId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roast     Roast    @relation(fields: [roastId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roastId], name: "unique_user_roast_upvote")
   @@map("roast_upvotes")
 }
 
 model Bunker {
-  id          String   @id @default(uuid())
-  name        String
-  inviteCode  String   @unique
-  matchId     String
-  creatorId   String
-  createdAt   DateTime @default(now())
-
-  match       Match    @relation(fields: [matchId], references: [id])
-  creator     User     @relation("BunkerCreator", fields: [creatorId], references: [id])
-  members     BunkerMember[]
+  id         String         @id @default(uuid())
+  name       String
+  inviteCode String         @unique
+  matchId    String
+  creatorId  String
+  createdAt  DateTime       @default(now())
+  members    BunkerMember[]
+  creator    User           @relation("BunkerCreator", fields: [creatorId], references: [id])
+  match      Match          @relation(fields: [matchId], references: [id])
 
   @@map("bunkers")
 }
 
 model BunkerMember {
-  id        String   @id @default(uuid())
-  bunkerId  String
-  userId    String
-  joinedAt  DateTime @default(now())
-
-  bunker    Bunker   @relation(fields: [bunkerId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String   @id @default(uuid())
+  bunkerId String
+  userId   String
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bunker   Bunker   @relation(fields: [bunkerId], references: [id], onDelete: Cascade)
 
   @@unique([bunkerId, userId])
   @@map("bunker_members")
 }
 
 model Post {
-  id          String    @id @default(uuid())
-  userId      String
-  content     String
-  imageUrl    String?
-  type        String    @default("OPINION")  // OPINION, HYPE, DEBATE, MEME
-  
-  fireCount      Int    @default(0)
-  clownCount     Int    @default(0)
-  toxicCount     Int    @default(0)
-  laughCount     Int    @default(0)
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reactions   PostReaction[]
+  id         String         @id @default(uuid())
+  userId     String
+  content    String
+  imageUrl   String?
+  type       String         @default("OPINION")
+  fireCount  Int            @default(0)
+  clownCount Int            @default(0)
+  toxicCount Int            @default(0)
+  laughCount Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime?
+  reactions  PostReaction[]
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([fireCount])
@@ -232,14 +203,13 @@ model Post {
 }
 
 model PostReaction {
-  id          String    @id @default(uuid())
-  postId      String
-  userId      String
-  type        String    // FIRE, ROAST, DISAGREE, LEGEND
-  createdAt   DateTime  @default(now())
-
-  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  type      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId, type], name: "unique_user_post_reaction")
   @@index([postId])
@@ -264,7 +234,6 @@ model Badge {
   icon        String
   category    String      @default("COMBAT")
   maxProgress Int         @default(50)
-
   createdAt   DateTime    @default(now())
   userBadges  UserBadge[]
 
@@ -272,16 +241,15 @@ model Badge {
 }
 
 model UserBadge {
-  id        String   @id @default(uuid())
-  userId    String
-  badgeId   String
-  tier      String   @default("BRONZE")
-  progress  Int      @default(0)
-  isPinned  Boolean  @default(false)
-  earnedAt  DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  id       String   @id @default(uuid())
+  userId   String
+  badgeId  String
+  tier     String   @default("BRONZE")
+  progress Int      @default(0)
+  isPinned Boolean  @default(false)
+  earnedAt DateTime @default(now())
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, badgeId])
   @@index([userId])
@@ -289,36 +257,29 @@ model UserBadge {
 }
 
 model SniperDuel {
-  id            String    @id @default(uuid())
+  id            String     @id @default(uuid())
   topicText     String
-  topicCategory String    @default("hot-take")
-
+  topicCategory String     @default("hot-take")
   player1Id     String
   player1Name   String
   player1Army   String
   player1Color  String
-
   player2Id     String
   player2Name   String
   player2Army   String
   player2Color  String
-
-  messages      String    @default("[]")   // JSON array of messages
-  status        String    @default("voting") // voting, completed
-
-  player1Votes  Int       @default(0)
-  player2Votes  Int       @default(0)
-  hypeCount     Int       @default(0)
-
+  messages      String     @default("[]")
+  status        String     @default("voting")
+  player1Votes  Int        @default(0)
+  player2Votes  Int        @default(0)
+  hypeCount     Int        @default(0)
   winnerId      String?
-
-  startedAt     DateTime  @default(now())
+  startedAt     DateTime   @default(now())
   endedAt       DateTime?
   verdictAt     DateTime?
-  createdAt     DateTime  @default(now())
-
-  votes         DuelVote[]
+  createdAt     DateTime   @default(now())
   hypes         DuelHype[]
+  votes         DuelVote[]
 
   @@index([createdAt])
   @@index([hypeCount])
@@ -326,12 +287,11 @@ model SniperDuel {
 }
 
 model DuelVote {
-  id        String    @id @default(uuid())
+  id        String     @id @default(uuid())
   duelId    String
   userId    String
-  votedFor  String    // 'player1' or 'player2'
-  createdAt DateTime  @default(now())
-
+  votedFor  String
+  createdAt DateTime   @default(now())
   duel      SniperDuel @relation(fields: [duelId], references: [id], onDelete: Cascade)
 
   @@unique([duelId, userId])
@@ -339,11 +299,10 @@ model DuelVote {
 }
 
 model DuelHype {
-  id        String    @id @default(uuid())
+  id        String     @id @default(uuid())
   duelId    String
   userId    String
-  createdAt DateTime  @default(now())
-
+  createdAt DateTime   @default(now())
   duel      SniperDuel @relation(fields: [duelId], references: [id], onDelete: Cascade)
 
   @@unique([duelId, userId])
@@ -354,12 +313,10 @@ model PointsLog {
   id        String   @id @default(uuid())
   userId    String
   amount    Int
-  source    String   // e.g. 'PREDICTION_CORRECT', 'DUEL_WIN', 'POST_CREATE'
-  sourceId  String?  // FK to the originating entity (predictionId, duelId, postId, etc.)
-  metadata  String?  // Optional JSON string for extra context
-
+  source    String
+  sourceId  String?
+  metadata  String?
   createdAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, source, createdAt])

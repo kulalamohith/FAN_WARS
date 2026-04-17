@@ -43,12 +43,6 @@ export default function AdminPage() {
     onError: (err: any) => alert(err.message || 'Failed to dispatch event')
   });
 
-  const triggerMutation = useMutation({
-    mutationFn: ({ matchId, payload }: { matchId: string; payload: any }) => 
-      api.predictions.trigger(`match-${matchId}`, payload),
-    onSuccess: () => alert('⚡ PREDICTION FIRED!'),
-    onError: (err: any) => alert(err.message)
-  });
 
   return (
     <div className="min-h-screen pb-20 relative bg-[#010204]">
@@ -87,7 +81,7 @@ export default function AdminPage() {
           ) : (
             <div className="grid grid-cols-1 gap-8">
               {liveMatches.map((match) => (
-                <AdminMatchCard key={match.id} match={match} triggerMutation={triggerMutation} adminEventMutation={adminEventMutation} />
+                <AdminMatchCard key={match.id} match={match} adminEventMutation={adminEventMutation} />
               ))}
             </div>
           )}
@@ -103,7 +97,7 @@ export default function AdminPage() {
           
           <div className="grid grid-cols-1 gap-8 opacity-80 hover:opacity-100 transition-opacity">
             {upcomingMatches.slice(0, 5).map((match) => (
-              <AdminMatchCard key={match.id} match={match} triggerMutation={triggerMutation} adminEventMutation={adminEventMutation} />
+              <AdminMatchCard key={match.id} match={match} adminEventMutation={adminEventMutation} />
             ))}
           </div>
         </section>
@@ -118,7 +112,7 @@ export default function AdminPage() {
           
           <div className="grid grid-cols-1 gap-8 opacity-40 hover:opacity-100 transition-all duration-500 grayscale hover:grayscale-0">
             {completedMatches.slice(0, 3).map((match) => (
-              <AdminMatchCard key={match.id} match={match} triggerMutation={triggerMutation} adminEventMutation={adminEventMutation} />
+              <AdminMatchCard key={match.id} match={match} adminEventMutation={adminEventMutation} />
             ))}
           </div>
         </section>
@@ -128,7 +122,34 @@ export default function AdminPage() {
   );
 }
 
-function AdminMatchCard({ match, triggerMutation, adminEventMutation }: any) {
+function AdminMatchCard({ match, adminEventMutation }: any) {
+  const [activePrediction, setActivePrediction] = useState<{ id: string, question: string, optionA: string, optionB: string } | null>(null);
+
+  const triggerMutation = useMutation({
+    mutationFn: (payload: any) => 
+      api.predictions.trigger(`match-${match.id}`, payload),
+    onSuccess: (data: any, variables: any) => {
+      alert('⚡ PREDICTION FIRED!');
+      setActivePrediction({
+        id: data.predictionId,
+        question: variables.questionText,
+        optionA: variables.optionA,
+        optionB: variables.optionB
+      });
+    },
+    onError: (err: any) => alert(err.message)
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: (correctOption: 'A' | 'B') =>
+      api.predictions.resolve(activePrediction!.id, correctOption),
+    onSuccess: (data: any) => {
+      alert(data.message || '✅ PREDICTION RESOLVED!');
+      setActivePrediction(null);
+    },
+    onError: (err: any) => alert(err.message)
+  });
+
   return (
     <div className="bg-gradient-to-br from-black/80 to-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group">
       <div className="flex flex-col xl:flex-row gap-8 relative z-10">
@@ -166,10 +187,27 @@ function AdminMatchCard({ match, triggerMutation, adminEventMutation }: any) {
         <div className="flex-1">
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
               <FormSection title="CLUTCH PREDICTION" color="#00FF88" icon="🎯">
-                <PredictionForm 
-                  onSubmit={(payload: any) => triggerMutation.mutate({ matchId: match.id.toString(), payload })}
-                  isSubmitting={triggerMutation.isPending}
-                />
+                {activePrediction ? (
+                  <div className="space-y-3">
+                    <div className="text-[11px] font-mono text-white/80 border-b border-white/10 pb-2 mb-2">
+                       <span className="text-[#00FF88] block text-[9px] mb-1 font-bold tracking-widest">ACTIVE PREDICTION:</span>
+                       {activePrediction.question}
+                    </div>
+                    <div className="flex gap-2">
+                      <WarzoneButton fullWidth variant="primary" className="py-2 min-h-0 text-[10px] flex-1 bg-[#00FF88]/20 text-[#00FF88] hover:bg-[#00FF88]/40 border border-[#00FF88]/50" onClick={() => resolveMutation.mutate('A')} loading={resolveMutation.isPending && resolveMutation.variables === 'A'}>
+                        ✅ {activePrediction.optionA}
+                      </WarzoneButton>
+                      <WarzoneButton fullWidth variant="danger" className="py-2 min-h-0 text-[10px] flex-1 bg-wz-red/20 text-wz-red hover:bg-wz-red/40 border border-wz-red/50" onClick={() => resolveMutation.mutate('B')} loading={resolveMutation.isPending && resolveMutation.variables === 'B'}>
+                        ✅ {activePrediction.optionB}
+                      </WarzoneButton>
+                    </div>
+                  </div>
+                ) : (
+                  <PredictionForm 
+                    onSubmit={(payload: any) => triggerMutation.mutate(payload)}
+                    isSubmitting={triggerMutation.isPending}
+                  />
+                )}
               </FormSection>
 
               <FormSection title="CHAOS BANNER" color="#FFD60A" icon="🔥">

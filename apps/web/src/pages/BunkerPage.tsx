@@ -18,7 +18,7 @@ export default function BunkerPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   
-  const { connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, activeAdminEvent } = useWarRoomStore();
+  const { connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, activeAdminEvent, isConnected } = useWarRoomStore();
 
   const [votedPredictions, setVotedPredictions] = useState<Set<string>>(new Set());
   const [chatInput, setChatInput] = useState('');
@@ -270,7 +270,7 @@ export default function BunkerPage() {
       <header className="sticky top-0 z-50 bg-black/70 backdrop-blur-2xl border-b border-wz-border/20">
         <div className="px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2">
           {/* Top Row: Back / Match / Members */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/')}
@@ -293,30 +293,27 @@ export default function BunkerPage() {
               )}
             </div>
             
-            <div className="flex items-center gap-2 sm:gap-4">
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] text-wz-yellow font-bold font-mono tracking-widest leading-none mb-1 shadow-[0_0_10px_rgba(255,214,10,0.5)]">
-                  PRIVATE: {bunker.name.toUpperCase()}
-                </span>
-                <span className="text-[10px] bg-wz-yellow/20 text-wz-yellow px-2 py-0.5 rounded border border-wz-yellow/30 font-mono flex items-center gap-1">
-                  INVITE CODE: <strong className="select-all tracking-wider">{bunker.inviteCode}</strong>
-                </span>
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/join/${bunker.inviteCode}`);
-                    alert("Invite link copied to clipboard!");
-                  }}
-                  className="mt-1 flex items-center justify-center gap-1 px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-colors text-[9px] font-mono rounded-md uppercase tracking-wider cursor-pointer"
-                >
-                  🔗 Copy Invite Link
-                </button>
-              </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-wz-yellow font-bold font-mono tracking-widest leading-none mb-1 shadow-[0_0_10px_rgba(255,214,10,0.5)]">
+                PRIVATE: {bunker.name.toUpperCase()}
+              </span>
+              <span className="text-[10px] bg-wz-yellow/20 text-wz-yellow px-2 py-0.5 rounded border border-wz-yellow/30 font-mono flex items-center gap-1">
+                CODE: <strong className="select-all tracking-wider">{bunker.inviteCode}</strong>
+              </span>
             </div>
 
             <button onClick={() => setShowMembersModal(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-wz-neon animate-pulse" />
               <span className="text-[10px] sm:text-xs font-mono font-bold text-white/80">{bunker.members.length} ONLINE</span>
             </button>
+          </div>
+
+          <div className="max-w-xl mx-auto w-full pb-2">
+            <div className="flex items-center justify-center gap-4 py-2">
+              <span className="text-xl font-display font-black text-white">{bunker.match?.homeArmy?.name || 'HOME'}</span>
+              <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.4em]">VS</span>
+              <span className="text-xl font-display font-black text-wz-yellow">{bunker.match?.awayArmy?.name || 'AWAY'}</span>
+            </div>
           </div>
         </div>
       </header>

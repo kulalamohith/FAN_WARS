@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const [showJoinBunker, setShowJoinBunker] = useState(false);
   const [bunkerName, setBunkerName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [homeTeam, setHomeTeam] = useState('');
+  const [awayTeam, setAwayTeam] = useState('');
   const [tickerIdx, setTickerIdx] = useState(0);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function DashboardPage() {
   const { data: armyLeaderboard } = useQuery({ queryKey: ['leaderboard', 'armies'], queryFn: () => api.leaderboard.armies(), refetchInterval: 60000 });
   const { data: roastsData } = useQuery({ queryKey: ['roasts', 'legendary'], queryFn: () => api.roasts.feed('viral', undefined) });
   const { data: myBunkersData } = useQuery({ queryKey: ['bunkers', 'my'], queryFn: () => api.bunkers.my(), refetchInterval: 15000 });
+  const { data: matchesData } = useQuery({ queryKey: ['matches', 'live'], queryFn: () => api.matches.live(), refetchInterval: 30000 });
 
   /* ── rank-up ── */
   useEffect(() => {
@@ -85,12 +88,18 @@ export default function DashboardPage() {
 
   /* ── mutations ── */
   const createBunkerMut = useMutation({
-    mutationFn: (matchId: string) => api.bunkers.create(bunkerName, matchId),
-    onSuccess: (r) => { setShowCreateBunker(''); setBunkerName(''); navigate(`/bunkers/${r.bunker.id}`); },
+    mutationFn: (matchId: string) => api.bunkers.create(bunkerName, { 
+      matchId: matchId === 'CUSTOM' ? undefined : matchId,
+      homeTeam,
+      awayTeam
+    }),
+    onSuccess: (r) => { setShowCreateBunker(''); setBunkerName(''); setHomeTeam(''); setAwayTeam(''); navigate(`/bunkers/${r.bunker.id}`); },
+    onError: (err: any) => alert(err.message || 'Failed to create private room'),
   });
   const joinBunkerMut = useMutation({
     mutationFn: () => api.bunkers.join(inviteCode),
     onSuccess: (r) => { setShowJoinBunker(false); setInviteCode(''); navigate(`/bunkers/${r.bunkerId}`); },
+    onError: (err: any) => alert(err.message || 'Failed to join private room'),
   });
 
   const claimDailyRewardMut = useMutation({
@@ -111,6 +120,38 @@ export default function DashboardPage() {
     }
   });
 
+  const [isPaying, setIsPaying] = useState(false);
+
+  const handleEntryFee = async (source: string, onSuccess: () => void) => {
+    console.log(`[EntryFee] Starting fee payment for ${source}...`);
+    if (Number(user?.totalWarPoints || 0) < 5) {
+      alert('Insufficient War Points. You need 5 WP to proceed.');
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      console.log(`[EntryFee] Calling /pay-entry for 5 WP...`);
+      const res = await api.profile.payEntry(5, source);
+      console.log(`[EntryFee] Response:`, res);
+      
+      if (res.success) {
+        if (user) {
+          setUser({ ...user, totalWarPoints: res.newTotalPoints.toString() });
+        }
+        console.log(`[EntryFee] Payment successful, triggering action...`);
+        onSuccess();
+      } else {
+        alert(res.message);
+      }
+    } catch (err: any) {
+      console.error(`[EntryFee] Error:`, err);
+      alert(err.message || 'Failed to process battle fee');
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
   const topArmies = armyLeaderboard?.armies?.slice(0, 5) || [];
   const myBunkers = myBunkersData?.bunkers || [];
 
@@ -128,8 +169,8 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const liveMatches: IPLMatch[] = [];
-  const upcomingMatches: IPLMatch[] = [];
+  const staticLiveMatches: IPLMatch[] = [];
+  const staticUpcomingMatches: IPLMatch[] = [];
 
   IPL_2026_SCHEDULE.forEach(match => {
     const matchStartTime = new Date(match.datetime);
@@ -137,13 +178,13 @@ export default function DashboardPage() {
     const isToday = matchStartTime.toDateString() === now.toDateString();
     
     if (isToday && now < matchEndTime) {
-      liveMatches.push(match);
+      staticLiveMatches.push(match);
     } else if (matchStartTime > now && !isToday) {
-      upcomingMatches.push(match);
+      staticUpcomingMatches.push(match);
     }
   });
 
-  upcomingMatches.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
+  staticUpcomingMatches.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
 
   const armyColor = profile?.army?.colorHex || user?.army?.colorHex || '#FF2D55';
   const armyName = profile?.army?.name || (typeof user?.army === 'string' ? user?.army : user?.army?.name) || '';
@@ -170,7 +211,18 @@ export default function DashboardPage() {
           <div className="flex-1 flex justify-end items-center gap-4 mr-4">
              <div className="hidden md:flex items-center gap-2">
                  <button 
-                  onClick={() => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); }} 
+                  onClick={() => { 
+                    const hostable = matchesData?.matches?.filter((m: any) => m.status === 'LIVE' || m.status === 'PRE') || [];
+                    if (hostable.length > 0) {
+                      setHomeTeam(hostable[0].homeTeam);
+                      setAwayTeam(hostable[0].awayTeam);
+                      setShowCreateBunker(hostable[0].id.toString());
+                    } else {
+                      setHomeTeam('');
+                      setAwayTeam('');
+                      setShowCreateBunker('CUSTOM');
+                    }
+                  }} 
                   className="px-3 py-1.5 rounded-lg bg-[#FFD60A]/10 text-[#FFD60A] hover:bg-[#FFD60A]/20 border border-[#FFD60A]/20 text-[10px] font-mono font-bold uppercase tracking-widest transition-all"
                  >
                    🛡️ Host Private
@@ -241,7 +293,18 @@ export default function DashboardPage() {
                 {([
                   { icon: '/claim-logo.png', label: 'Claim', desc: 'Daily Reward', color: '#B026FF', go: () => claimDailyRewardMut.mutate() },
                   { icon: '/war-room-logo.png', label: 'War Room', desc: 'Join the fight', color: '#FF2D55', go: () => navigate('/live') },
-                  { icon: '/host-logo.png', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { (liveMatches.length > 0) ? setShowCreateBunker(liveMatches[0].id.toString()) : alert('No live matches!'); } },
+                  { icon: '/host-logo.png', label: 'Host', desc: 'Private Watch Room', color: '#FFD60A', go: () => { 
+                    const hostable = matchesData?.matches?.filter((m: any) => m.status === 'LIVE' || m.status === 'PRE') || [];
+                    if (hostable.length > 0) {
+                      setHomeTeam(hostable[0].homeTeam);
+                      setAwayTeam(hostable[0].awayTeam);
+                      setShowCreateBunker(hostable[0].id.toString());
+                    } else {
+                      setHomeTeam('');
+                      setAwayTeam('');
+                      setShowCreateBunker('CUSTOM');
+                    }
+                  }},
                   { icon: '/join-logo.png', label: 'Join', desc: 'Enter Room Code', color: '#00FF88', go: () => setShowJoinBunker(true) },
                 ] as const).map((a) => (
                   <motion.button key={a.label} whileHover={{ y: -4 }} whileTap={{ scale: 0.95 }} onClick={a.go}
@@ -296,19 +359,19 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {liveMatches.length === 0 ? (
+              {staticLiveMatches.length === 0 ? (
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-8 text-center">
                   <p className="text-white/40 text-sm font-display font-bold">The Arena is Quiet</p>
                   <p className="text-white/20 text-xs font-mono mt-1">No live matches right now.</p>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {liveMatches.map((m: IPLMatch) => {
+                  {staticLiveMatches.map((m: IPLMatch) => {
                     const hc = TEAM_COLORS[m.homeTeam] || '#FF2D55';
                     const ac = TEAM_COLORS[m.awayTeam] || '#007AFF';
 
                     return (
-                      <div key={m.id} onClick={() => navigate(`/war-room/${m.id}`)} className="group block cursor-pointer">
+                      <div key={m.id} onClick={() => handleEntryFee('WAR_ROOM_ENTRY', () => navigate(`/war-room/${m.id}`))} className="group block cursor-pointer">
                         <div className="flex items-center justify-between mb-2.5 px-2">
                            <span className="font-display font-black text-[22px] md:text-3xl tracking-tight" style={{ color: hc, textShadow: `0 0 15px ${hc}40` }}>{m.homeTeam}</span>
                            <div className="flex flex-col items-center">
@@ -365,13 +428,13 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {upcomingMatches.length === 0 ? (
+              {staticUpcomingMatches.length === 0 ? (
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] py-6 text-center">
                   <p className="text-white/20 text-xs font-mono">No upcoming matches scheduled.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {upcomingMatches.slice(0, 3).map((m: IPLMatch, i: number) => {
+                  {staticUpcomingMatches.slice(0, 3).map((m: IPLMatch, i: number) => {
                     const hc = TEAM_COLORS[m.homeTeam] || '#FF2D55';
                     const ac = TEAM_COLORS[m.awayTeam] || '#007AFF';
 
@@ -445,12 +508,37 @@ export default function DashboardPage() {
       <LevelUpModal isOpen={showLevelUp} newRank={newRank} onClose={() => setShowLevelUp(false)} />
 
       <Modal open={!!showCreateBunker} onClose={() => setShowCreateBunker('')}>
-        <h2 className="text-lg font-display font-bold text-[#FFD60A] mb-1">Create Private War Room 🛡️</h2>
-        <p className="text-white/40 text-xs mb-4">Host a private watch room for your squad.</p>
-        <input type="text" placeholder="Room Name" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 mb-4 outline-none text-sm" />
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-display font-bold text-[#FFD60A]">Create Private War Room 🛡️</h2>
+          {showCreateBunker === 'CUSTOM' && (
+            <span className="text-[8px] bg-[#FFD60A]/20 text-[#FFD60A] px-1.5 py-0.5 rounded font-mono font-black border border-[#FFD60A]/30 uppercase tracking-tighter">Custom Mode</span>
+          )}
+        </div>
+        <p className="text-white/40 text-xs mb-4">Host a custom battle or join an official one.</p>
+        
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-1.5 block">Room Name</label>
+            <input type="text" placeholder="Squad HQ" value={bunkerName} onChange={(e) => setBunkerName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 outline-none text-sm" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-1.5 block">Team A</label>
+              <input type="text" placeholder="Home Team" value={homeTeam} onChange={(e) => { setHomeTeam(e.target.value); setShowCreateBunker('CUSTOM'); }} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 outline-none text-sm font-bold" />
+            </div>
+            <div>
+              <label className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-1.5 block">Team B</label>
+              <input type="text" placeholder="Away Team" value={awayTeam} onChange={(e) => { setAwayTeam(e.target.value); setShowCreateBunker('CUSTOM'); }} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#FFD60A]/50 outline-none text-sm font-bold" />
+            </div>
+          </div>
+        </div>
+
         <div className="flex gap-2">
           <WarzoneButton variant="ghost" fullWidth onClick={() => setShowCreateBunker('')}>Cancel</WarzoneButton>
-          <WarzoneButton fullWidth onClick={() => createBunkerMut.mutate(showCreateBunker)} disabled={bunkerName.length < 3 || createBunkerMut.isPending}>Create</WarzoneButton>
+          <WarzoneButton fullWidth onClick={() => handleEntryFee('PRIVATE_ROOM_HOST_FINAL', () => createBunkerMut.mutate(showCreateBunker))} disabled={bunkerName.length < 3 || !homeTeam || !awayTeam || createBunkerMut.isPending || isPaying}>
+            {isPaying ? 'PAYING...' : createBunkerMut.isPending ? 'CREATING...' : 'Create (5 WP)'}
+          </WarzoneButton>
         </div>
       </Modal>
 
@@ -460,7 +548,9 @@ export default function DashboardPage() {
         <input type="text" placeholder="ROOM CODE" value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} maxLength={6} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-center tracking-widest font-mono font-bold focus:border-[#FF2D55]/50 mb-4 outline-none uppercase text-sm" />
         <div className="flex gap-2">
           <WarzoneButton variant="ghost" fullWidth onClick={() => setShowJoinBunker(false)}>Cancel</WarzoneButton>
-          <WarzoneButton variant="danger" fullWidth onClick={() => joinBunkerMut.mutate()} disabled={inviteCode.length < 5 || joinBunkerMut.isPending}>Join</WarzoneButton>
+          <WarzoneButton variant="danger" fullWidth onClick={() => handleEntryFee('PRIVATE_ROOM_JOIN_FINAL', () => joinBunkerMut.mutate())} disabled={inviteCode.length < 5 || joinBunkerMut.isPending || isPaying}>
+            {isPaying ? 'PAYING...' : joinBunkerMut.isPending ? 'JOINING...' : 'Join (5 WP)'}
+          </WarzoneButton>
         </div>
       </Modal>
     </div>

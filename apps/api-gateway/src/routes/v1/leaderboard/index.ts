@@ -5,51 +5,64 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../../../lib/db';
 import { calculateRank } from '../../../lib/ranks';
+import { getRedis } from '../../../lib/redis';
+
+const CACHE_TTL = 60; // seconds
 
 export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
   // --- GET Top 50 Warriors (/v1/leaderboard) ---
   fastify.get('/', async (request, reply) => {
-    // Note: In an MVP, doing a direct findMany sort on a BigInt column is fine.
-    // At scale, we would use a Redis sorted set for real-time leaderboards.
-    
+    const CACHE_KEY = 'leaderboard:top50';
+
+    // 1. Try Redis cache first
+    try {
+      const cached = await getRedis().get(CACHE_KEY);
+      if (cached) {
+        return reply.send(JSON.parse(cached));
+      }
+    } catch { /* Redis unavailable, fall through to DB */ }
+
+    // 2. Cache miss — query DB
     const topUsers = await db.user.findMany({
       take: 50,
-      orderBy: {
-        totalWarPoints: 'desc'
-      },
-      include: {
-        army: true
-      }
+      orderBy: { totalWarPoints: 'desc' },
+      include: { army: true },
     });
 
-    // Map DB output to client-safe DTO and attach dynamic rank
     const leaderboard = topUsers.map((u, index) => ({
       rankPosition: index + 1,
       id: u.id,
       username: u.username,
       totalWarPoints: u.totalWarPoints.toString(),
       militaryRank: calculateRank(u.totalWarPoints),
-      army: {
-        id: u.army.id,
-        name: u.army.name,
-        colorHex: u.army.colorHex
-      }
+      army: { id: u.army.id, name: u.army.name, colorHex: u.army.colorHex },
     }));
 
-    return reply.send({
-      success: true,
-      leaderboard
-    });
+    const response = { success: true, leaderboard };
+
+    // 3. Populate cache (fire-and-forget)
+    try {
+      await getRedis().set(CACHE_KEY, JSON.stringify(response), 'EX', CACHE_TTL);
+    } catch { /* ignore cache write errors */ }
+
+    return reply.send(response);
   });
 
   // --- GET Army Leaderboard (/v1/leaderboard/armies) ---
   fastify.get('/armies', async (request, reply) => {
+    const CACHE_KEY = 'leaderboard:armies';
+
+    // 1. Try Redis cache first
+    try {
+      const cached = await getRedis().get(CACHE_KEY);
+      if (cached) {
+        return reply.send(JSON.parse(cached));
+      }
+    } catch { /* fall through */ }
+
+    // 2. DB query
     const armies = await db.army.findMany({
-      include: {
-        users: {
-          select: { totalWarPoints: true },
-        },
-      },
+      include: { users: { select: { totalWarPoints: true } } },
     });
 
     const ranked = armies
@@ -57,16 +70,22 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
         id: a.id,
         name: a.name,
         colorHex: a.colorHex,
-        totalWarPoints: a.users.reduce(
-          (sum: bigint, u: any) => sum + BigInt(u.totalWarPoints),
-          BigInt(0)
-        ).toString(),
+        totalWarPoints: a.users
+          .reduce((sum: bigint, u: any) => sum + BigInt(u.totalWarPoints), BigInt(0))
+          .toString(),
         memberCount: a.users.length,
       }))
       .sort((a, b) => (BigInt(b.totalWarPoints) > BigInt(a.totalWarPoints) ? 1 : -1))
       .map((a, i) => ({ ...a, rankPosition: i + 1 }));
 
-    return reply.send({ success: true, armies: ranked });
+    const response = { success: true, armies: ranked };
+
+    // 3. Cache
+    try {
+      await getRedis().set(CACHE_KEY, JSON.stringify(response), 'EX', CACHE_TTL);
+    } catch { /* ignore */ }
+
+    return reply.send(response);
   });
 
   // --- GET Team Context (/v1/leaderboard/team-context) ---

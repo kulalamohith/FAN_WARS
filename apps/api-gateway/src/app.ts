@@ -8,6 +8,7 @@
 import path from 'path';
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 
 // Global BigInt serialization patch for Fastify/JSON.stringify
 // @ts-ignore
@@ -55,6 +56,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: config.CORS_ORIGIN,
     credentials: true,
+  });
+
+  // --- Rate Limiting ---
+  // Global: 2000 requests per 10 minutes per IP
+  await app.register(rateLimit, {
+    global: true,
+    max: 2000,
+    timeWindow: '10 minutes',
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      message: `Slow down soldier! You've hit the rate limit. Try again in ${Math.ceil(context.ttl / 1000)}s.`,
+    }),
   });
 
   // --- Sensible error handling (adds httpErrors, to, assert) ---

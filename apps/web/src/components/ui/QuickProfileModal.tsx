@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobalSocketStore } from '../../stores/globalSocketStore';
 import { useAuthStore } from '../../stores/authStore';
+import { api } from '../../lib/api';
 
 export interface QuickProfileUser {
   id: string;
@@ -17,12 +18,29 @@ export default function QuickProfileModal({ user, onClose }: { user: QuickProfil
   
   const sendChallenge = useGlobalSocketStore((s) => s.sendChallenge);
   const me = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
 
-  const handleChallenge = () => {
+  const handleChallenge = async () => {
     if (!topicText.trim() || !me) return;
-    sendChallenge(user.id, user.username, me.username, topicText, me.id);
-    alert('Challenge sent!');
-    onClose();
+
+    if (Number(me.totalWarPoints) < 5) {
+      alert('Insufficient War Points. You need 5 WP to challenge someone to a Sniper Duel.');
+      return;
+    }
+
+    try {
+      const res = await api.profile.payEntry(5, 'SNIPER_DUEL_CHALLENGE');
+      if (res.success) {
+        setUser({ ...me, totalWarPoints: res.newTotalPoints.toString() });
+        sendChallenge(user.id, user.username, me.username, topicText, me.id);
+        alert('Challenge sent! (5 WP Battle Fee Charged)');
+        onClose();
+      } else {
+        alert(res.message);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to process battle fee');
+    }
   };
 
   return (

@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { Server, Socket } from 'socket.io';
 import fp from 'fastify-plugin';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Redis } from 'ioredis';
 import { awardPoints, POINT_VALUES } from '../lib/points';
 
 declare module 'fastify' {
@@ -22,6 +24,34 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
     },
   });
+
+  // --- Redis Adapter for Horizontal Scaling ---
+  // Allows multiple API gateway instances to share Socket.IO events via Redis pub/sub.
+  // Falls back gracefully to in-memory if Redis is not available (local dev without Docker).
+  if (process.env.REDIS_URL) {
+    try {
+      const pubClient = new Redis(process.env.REDIS_URL);
+      const subClient = pubClient.duplicate();
+
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          pubClient.once('ready', resolve);
+          pubClient.once('error', reject);
+        }),
+        new Promise<void>((resolve, reject) => {
+          subClient.once('ready', resolve);
+          subClient.once('error', reject);
+        }),
+      ]);
+
+      io.adapter(createAdapter(pubClient, subClient));
+      fastify.log.info('⚡ Socket.IO → Redis adapter enabled (multi-instance ready)');
+    } catch (err) {
+      fastify.log.warn('⚠️  Redis unavailable — Socket.IO using in-memory adapter (single-instance only)');
+    }
+  } else {
+    fastify.log.warn('⚠️  REDIS_URL not set — Socket.IO using in-memory adapter (single-instance only)');
+  }
 
   fastify.decorate('io', io);
 

@@ -3,9 +3,14 @@
  *
  * Every point award in the app flows through awardPoints().
  * Handles deduplication, daily caps, audit logging, and atomic DB writes.
+ *
+ * Scale notes:
+ *  - Daily cap checks use Redis INCR (O(1)), falling back to DB if Redis is unavailable.
+ *  - batchAwardPoints uses Promise.all for parallel execution.
  */
 
 import { db } from './db';
+import { getRedis } from './redis';
 
 // ─── Point Source Types ───
 export type PointSource =
@@ -24,7 +29,8 @@ export type PointSource =
   | 'DAILY_LOGIN'
   | 'STREAK_BONUS'
   | 'BUNKER_CREATE'
-  | 'BUNKER_JOIN';
+  | 'BUNKER_JOIN'
+  | 'TRAITOR_SWITCH';
 
 // ─── Point Values ───
 export const POINT_VALUES = {
@@ -67,17 +73,43 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+function todayString(): string {
+  return new Date().toISOString().split('T')[0]; // e.g. "2025-04-15"
+}
+
 /**
  * Check how many times a given source has been awarded to a user today.
+ * Uses Redis INCR counter (O(1) in-memory) with DB fallback.
  */
 async function getDailyCount(userId: string, source: PointSource): Promise<number> {
-  return db.pointsLog.count({
-    where: {
-      userId,
-      source,
-      createdAt: { gte: startOfToday() },
-    },
-  });
+  try {
+    const redis = getRedis();
+    const key = `daily:${userId}:${source}:${todayString()}`;
+    const val = await redis.get(key);
+    return val ? parseInt(val, 10) : 0;
+  } catch {
+    // Redis unavailable — fall back to DB
+    return db.pointsLog.count({
+      where: { userId, source, createdAt: { gte: startOfToday() } },
+    });
+  }
+}
+
+/**
+ * Increment the Redis daily counter after a successful award.
+ * TTL = 25 hours to ensure cleanup regardless of timezone drift.
+ */
+async function incrementDailyCount(userId: string, source: PointSource): Promise<void> {
+  try {
+    const redis = getRedis();
+    const key = `daily:${userId}:${source}:${todayString()}`;
+    const pipeline = redis.pipeline();
+    pipeline.incr(key);
+    pipeline.expire(key, 90000); // 25 hours in seconds
+    await pipeline.exec();
+  } catch {
+    // Redis unavailable — counter stays in DB only, no action needed
+  }
 }
 
 /**
@@ -161,6 +193,9 @@ export async function awardPoints(
     }),
   ]);
 
+  // 4. Increment Redis daily counter (fire-and-forget)
+  incrementDailyCount(userId, source).catch(() => {});
+
   return { awarded: true, amount };
 }
 
@@ -178,8 +213,15 @@ export async function batchAwardPoints(
   let awarded = 0;
   let skipped = 0;
 
-  for (const userId of userIds) {
-    const result = await awardPoints(userId, amount, source, `${sourceId}_${userId}`, metadata);
+  // Parallel execution — all users awarded concurrently instead of serially.
+  // For 5k users this is the difference between ~25s and ~2s.
+  const results = await Promise.all(
+    userIds.map(userId =>
+      awardPoints(userId, amount, source, `${sourceId}_${userId}`, metadata)
+    )
+  );
+
+  for (const result of results) {
     if (result.awarded) awarded++;
     else skipped++;
   }

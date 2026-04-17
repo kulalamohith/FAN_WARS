@@ -25,7 +25,7 @@ export default function WarRoomPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const user = useAuthStore((s) => s.user);
+  const { user, setAuth } = useAuthStore();
   
   const { connect, disconnect, sendMessage, messages, isConnected, toxicityHome, toxicityAway, activePredictions, liveReactions, sendReaction, activeAdminEvent, clearAdminEvent } = useWarRoomStore();
 
@@ -144,6 +144,28 @@ export default function WarRoomPage() {
       setVotedPredictions((prev) => new Set(prev).add(variables.predId));
       queryClient.invalidateQueries({ queryKey: ['warRoom', matchId] });
     },
+    onError: (err: any, variables) => {
+      if (err.message?.toLowerCase().includes('already voted')) {
+        setVotedPredictions((prev) => new Set(prev).add(variables.predId));
+      } else {
+        alert(err.message || 'Failed to submit vote');
+      }
+    }
+  });
+
+  const traitorMutation = useMutation({
+    mutationFn: ({ winningTeamName, pointsReward }: { winningTeamName: string; pointsReward: number }) =>
+      api.profile.traitorSwitch(winningTeamName, pointsReward),
+    onSuccess: (data) => {
+      setAuth(data.token, data.user);
+      queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      setTimeout(() => clearAdminEvent(), 2000);
+    },
+    onError: (err: any) => {
+      alert(err.message || 'Failed to execute traitor protocol');
+      clearAdminEvent();
+    }
   });
 
   const handleSendChat = () => {
@@ -349,7 +371,10 @@ export default function WarRoomPage() {
                 losingTeam={activeAdminEvent.data?.losingTeam || "Rivals"}
                 winningTeam={activeAdminEvent.data?.winningTeam || "Allies"}
                 pointsReward={activeAdminEvent.data?.pointsReward || 5000}
-                onAccept={() => setTimeout(() => clearAdminEvent(), 2000)}
+                onAccept={() => traitorMutation.mutate({ 
+                  winningTeamName: activeAdminEvent.data?.winningTeam || "Allies", 
+                  pointsReward: activeAdminEvent.data?.pointsReward || 5000 
+                })}
                 onReject={() => clearAdminEvent()}
               />
             </motion.div>
@@ -392,7 +417,7 @@ export default function WarRoomPage() {
                   <p className="font-display font-bold text-lg mb-4">{pred.question}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <WarzoneButton 
-                      loading={voteMutation.isPending} 
+                      loading={voteMutation.isPending && voteMutation.variables?.predId === pred.id && voteMutation.variables?.option === 'A'} 
                       onClick={() => voteMutation.mutate({ predId: pred.id, option: 'A' })} 
                       className="text-xs py-3 cursor-pointer z-30"
                     >
@@ -400,7 +425,7 @@ export default function WarRoomPage() {
                     </WarzoneButton>
                     <WarzoneButton 
                       variant="danger" 
-                      loading={voteMutation.isPending} 
+                      loading={voteMutation.isPending && voteMutation.variables?.predId === pred.id && voteMutation.variables?.option === 'B'} 
                       onClick={() => voteMutation.mutate({ predId: pred.id, option: 'B' })} 
                       className="text-xs py-3 cursor-pointer z-30"
                     >

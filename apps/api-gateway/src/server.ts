@@ -12,7 +12,6 @@ async function start(): Promise<void> {
   const app = await buildApp();
 
   try {
-    // Start listening on configured host and port
     await app.listen({
       host: config.HOST,
       port: config.PORT,
@@ -28,7 +27,6 @@ async function start(): Promise<void> {
   }
 
   // --- Graceful Shutdown ---
-  // Ensures active connections complete before the process dies.
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}. Shutting down gracefully...`);
     await app.close();
@@ -39,4 +37,9 @@ async function start(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
+// Export for cluster.ts workers
+export { start };
+
+// Start directly when this file is the entry point
 start();
+

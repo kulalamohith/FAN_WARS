@@ -50,7 +50,7 @@ export default function ProfilePage() {
   const [isSharing, setIsSharing] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'badges' | 'stats'>('badges');
+  const [activeTab, setActiveTab] = useState<'badges' | 'stats' | 'history'>('badges');
 
   // Determine if viewing own profile or another user's
   const isOwnProfile = !paramUsername || paramUsername === user?.username;
@@ -58,7 +58,13 @@ export default function ProfilePage() {
   const { data: profile, isLoading } = useQuery({
     queryKey: isOwnProfile ? ['profile-me'] : ['profile-user', paramUsername],
     queryFn: () => isOwnProfile ? api.profile.me() : api.profile.user(paramUsername!),
-    refetchInterval: 15000,
+    refetchInterval: 30000,
+  });
+  
+  const { data: historyRes, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ['profile-history'],
+    queryFn: () => api.profile.getHistory(),
+    enabled: activeTab === 'history',
   });
 
   const pinMutation = useMutation({
@@ -309,6 +315,15 @@ export default function ProfilePage() {
               <motion.div layoutId="tabLine" className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full" />
             )}
           </button>
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 pb-3 text-sm font-bold transition-colors relative ${activeTab === 'history' ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+          >
+            History
+            {activeTab === 'history' && (
+              <motion.div layoutId="tabLine" className="absolute bottom-0 left-0 w-full h-[2px] bg-white rounded-t-full" />
+            )}
+          </button>
         </motion.div>
 
         {/* ══════ TAB CONTENT ══════ */}
@@ -408,6 +423,36 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
+              </motion.div>
+            )}
+
+            {/* --- HISTORY TAB --- */}
+            {activeTab === 'history' && (
+              <motion.div 
+                key="history"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3"
+              >
+                {isHistoryLoading ? (
+                  <div className="flex justify-center py-10 opacity-20">Loading Logs...</div>
+                ) : historyRes?.history?.length ? (
+                  historyRes.history.map((log: any) => (
+                    <div key={log.id} className="p-4 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-widest">{log.source.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-white/80 font-medium">{new Date(log.createdAt).toLocaleDateString()} at {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div className={`text-sm font-black font-mono ${log.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {log.amount > 0 ? `+${log.amount}` : log.amount} WP
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-20 opacity-20 text-xs font-mono uppercase tracking-widest">No transaction records found.</div>
+                )}
               </motion.div>
             )}
 
@@ -571,6 +616,7 @@ export default function ProfilePage() {
         onClose={() => setIsEditOpen(false)} 
         currentBio={profile?.user?.bio || ''} 
         currentDp={profile?.user?.profilePictureUrl || null} 
+        currentUsername={profileUsername || ''}
       />
     </div>
   );

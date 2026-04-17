@@ -146,9 +146,9 @@ export const api = {
 
   // ---- Bunkers (Private Watch Rooms) ----
   bunkers: {
-    create: (name: string, matchId: string) =>
+    create: (name: string, options: { matchId?: string; homeTeam?: string; awayTeam?: string }) =>
       request<{ success: boolean; bunker: any }>('/bunkers', {
-        method: 'POST', body: JSON.stringify({ name, matchId }),
+        method: 'POST', body: JSON.stringify({ name, ...options }),
       }),
     join: (inviteCode: string) =>
       request<{ success: boolean; bunkerId: string }>('/bunkers/join', {
@@ -211,10 +211,12 @@ export const api = {
       request<{ success: boolean; message: string }>('/profile/badges/pin', {
         method: 'POST', body: JSON.stringify({ badgeKey, pin }),
       }),
-    update: (data: { bio?: string }) =>
-      request<{ success: boolean; message: string }>('/profile/me', {
+    update: (data: { bio?: string; username?: string; removeProfilePicture?: boolean }) =>
+      request<{ success: boolean; message: string; token?: string }>('/profile/me', {
         method: 'PUT', body: JSON.stringify(data),
       }),
+    getHistory: () =>
+      request<{ success: boolean; history: any[] }>('/profile/me/history'),
     upload: (formData: FormData) => {
       const token = localStorage.getItem('wz_token');
       return fetch(`${BASE}/profile/upload`, {
@@ -225,6 +227,14 @@ export const api = {
         body: formData,
       }).then(res => res.json());
     },
+    traitorSwitch: (winningTeamName: string, pointsReward: number) =>
+      request<{ success: boolean; message: string; token: string; user: any }>('/profile/traitor-switch', {
+        method: 'POST', body: JSON.stringify({ winningTeamName, pointsReward }),
+      }),
+    payEntry: (amount: number, source: string) =>
+      request<{ success: boolean; message: string; newTotalPoints: number }>('/profile/pay-entry', {
+        method: 'POST', body: JSON.stringify({ amount, source }),
+      }),
   },
 
   // ---- Duels (Sniper Duels — Global Feed) ----

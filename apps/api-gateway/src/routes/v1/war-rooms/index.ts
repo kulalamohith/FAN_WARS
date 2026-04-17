@@ -22,9 +22,15 @@ export const warRoomRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const roomId = parsedParams.data.id;
+      console.log(`[WarRoomGet] Fetching room with ID or MatchID: ${roomId}`);
 
-      const room = await db.warRoom.findUnique({
-        where: { id: roomId },
+      const room = await db.warRoom.findFirst({
+        where: {
+          OR: [
+            { id: roomId },
+            { matchId: roomId }
+          ]
+        },
         include: {
           match: {
             include: {
