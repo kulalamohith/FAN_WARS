@@ -29,3 +29,15 @@ prisma/*.db
 
 # Docker
 docker-data/
+
+# Security & Environment
+.env.production
+
+# Local Clutter & Test Scripts
+status*.txt
+check*.ts
+test_*.js
+test_*.mjs
+
+# Application Specific
+apps/api-gateway/public/uploads/
