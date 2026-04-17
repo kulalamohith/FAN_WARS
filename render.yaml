@@ -42,16 +42,14 @@ services:
     dockerfilePath: apps/web/Dockerfile
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: fan-wars-api
-          property: host
+        value: https://replace-this-after-deploy.onrender.com/api/v1
+
+  # ─── Managed Redis Service ──────────────────────────────
+  - type: redis
+    name: fan-wars-redis
+    plan: free
+    ipAllowList: []
 
 databases:
   - name: fan-wars-db
     plan: free
-
-redises:
-  - name: fan-wars-redis
-    plan: free
-    ipAllowList: [] # Only allow internal access
