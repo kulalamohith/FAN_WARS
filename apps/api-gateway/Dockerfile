@@ -36,5 +36,5 @@ USER warzone
 
 EXPOSE 3000
 
-# Default: single process. Override with cluster.js for multi-core.
-CMD ["node", "dist/cluster.js"]
+# Run database push to ensure schema is up-to-date, then start the cluster
+CMD npx prisma db push --accept-data-loss && node dist/cluster.js

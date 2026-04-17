@@ -26,31 +26,28 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
   });
 
   // --- Redis Adapter for Horizontal Scaling ---
-  // Allows multiple API gateway instances to share Socket.IO events via Redis pub/sub.
-  // Falls back gracefully to in-memory if Redis is not available (local dev without Docker).
   if (process.env.REDIS_URL) {
-    try {
-      const pubClient = new Redis(process.env.REDIS_URL);
-      const subClient = pubClient.duplicate();
+    const pubClient = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: true,
+    });
+    const subClient = pubClient.duplicate();
 
-      await Promise.all([
-        new Promise<void>((resolve, reject) => {
-          pubClient.once('ready', resolve);
-          pubClient.once('error', reject);
-        }),
-        new Promise<void>((resolve, reject) => {
-          subClient.once('ready', resolve);
-          subClient.once('error', reject);
-        }),
-      ]);
-
+    // Connect asynchronously to avoid blocking Fastify startup / health checks
+    pubClient.on('ready', () => {
       io.adapter(createAdapter(pubClient, subClient));
-      fastify.log.info('⚡ Socket.IO → Redis adapter enabled (multi-instance ready)');
-    } catch (err) {
-      fastify.log.warn('⚠️  Redis unavailable — Socket.IO using in-memory adapter (single-instance only)');
-    }
+      fastify.log.info('⚡ Socket.IO → Redis adapter enabled');
+    });
+
+    pubClient.on('error', (err) => {
+      fastify.log.error(err, '❌ Redis error');
+    });
+
+    subClient.on('error', (err) => {
+      fastify.log.error(err, '❌ Redis Sub error');
+    });
   } else {
-    fastify.log.warn('⚠️  REDIS_URL not set — Socket.IO using in-memory adapter (single-instance only)');
+    fastify.log.warn('⚠️  REDIS_URL not set — Socket.IO using in-memory adapter');
   }
 
   fastify.decorate('io', io);
