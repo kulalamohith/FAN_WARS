@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: fan-wars-api-v2
-    runtime: docker
+    name: fan-wars-api
+    env: docker
     plan: free
     dockerContext: .
     dockerfilePath: apps/api-gateway/Dockerfile
@@ -10,30 +10,32 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: fan-wars-db-v2
+          name: fan-wars-db
           property: connectionString
       - key: REDIS_URL
         fromService:
-          name: fan-wars-redis-v2
+          name: fan-wars-redis
           property: connectionString
       - key: JWT_SECRET
         sync: false
 
   - type: web
-    name: fan-wars-web-v2
-    runtime: docker
+    name: fan-wars-web
+    env: docker
     plan: free
     dockerContext: .
     dockerfilePath: apps/web/Dockerfile
     envVars:
       - key: VITE_API_URL
-        value: https://replace-this-after-deploy.onrender.com/api/v1
+        value: https://replace-after-deploy.onrender.com/api/v1
+    buildArgs:
+      VITE_API_URL: https://replace-after-deploy.onrender.com/api/v1
 
   - type: keyvalue
-    name: fan-wars-redis-v2
+    name: fan-wars-redis
     plan: free
     ipAllowList: []
 
 databases:
-  - name: fan-wars-db-v2
+  - name: fan-wars-db
     plan: free
