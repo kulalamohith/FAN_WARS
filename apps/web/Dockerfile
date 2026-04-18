@@ -3,11 +3,19 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Copy package files for the monorepo root and ALL workspaces
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
+COPY apps/api-gateway/package.json ./apps/api-gateway/
 
+# Build arguments for Vite injection
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
+# Install dependencies
 RUN npm install --workspace=@warzone/web
 
+# Copy source
 COPY apps/web ./apps/web
 
 # Build the production Vite bundle

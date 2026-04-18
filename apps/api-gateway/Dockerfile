@@ -3,11 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files for the monorepo root and api-gateway
+# Copy package files for the monorepo root and ALL workspaces
 COPY package.json package-lock.json ./
 COPY apps/api-gateway/package.json ./apps/api-gateway/
+COPY apps/web/package.json ./apps/web/
 
-# Install ALL dependencies (including devDependencies for build)
+# Install dependencies (npm handles the workspace graph correctly when all package.jsons are present)
 RUN npm install --workspace=@warzone/api-gateway
 
 # Copy source
@@ -24,11 +25,12 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-# Only copy what's needed to run
+# Copy built app and ALL node_modules (including hoisted root modules)
 COPY --from=builder /app/apps/api-gateway/dist ./dist
 COPY --from=builder /app/apps/api-gateway/package.json ./package.json
-COPY --from=builder /app/apps/api-gateway/node_modules ./node_modules
 COPY --from=builder /app/apps/api-gateway/prisma ./prisma
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api-gateway/node_modules ./apps/api-gateway/node_modules
 
 # Non-root user for security
 RUN addgroup -S warzone && adduser -S warzone -G warzone

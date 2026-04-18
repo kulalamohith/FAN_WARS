@@ -43,6 +43,9 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://replace-this-after-deploy.onrender.com/api/v1
+    dockerBuildArgs:
+      - key: VITE_API_URL
+        value: https://replace-this-after-deploy.onrender.com/api/v1
 
   # ─── Managed Redis Service ──────────────────────────────
   - type: redis
