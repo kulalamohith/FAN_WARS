@@ -23,6 +23,9 @@ RUN npm run build --workspace=@warzone/api-gateway
 # ─── Stage 2: Production Runtime ──────────────────────────
 FROM node:20-alpine AS runner
 
+# Install OpenSSL for Prisma engines
+RUN apk add --no-cache openssl
+
 # Non-root user for security
 RUN addgroup -S warzone && adduser -S warzone -G warzone
 
