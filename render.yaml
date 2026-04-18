@@ -17,7 +17,9 @@ services:
           name: "fan-wars-redis"
           property: "connectionString"
       - key: "JWT_SECRET"
-        generateValue: true
+        sync: false
+      - key: "CLUSTER_WORKERS"
+        value: "1"
 
   - type: web
     name: "fan-wars-web"
@@ -29,7 +31,7 @@ services:
       - key: "VITE_API_URL"
         value: "https://replace-this-after-deploy.onrender.com/api/v1"
     buildArgs:
-      VITE_API_URL: "https://replace-this-after-deploy.onrender.com/api/v1"
+      "VITE_API_URL": "https://replace-this-after-deploy.onrender.com/api/v1"
 
   - type: keyvalue
     name: "fan-wars-redis"
