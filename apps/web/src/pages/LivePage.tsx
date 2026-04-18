@@ -163,7 +163,7 @@ export default function LivePage() {
   const [inviteCode, setInviteCode] = useState('');
 
   const createBunkerMut = useMutation({
-    mutationFn: (matchId: string) => api.bunkers.create(bunkerName, matchId),
+    mutationFn: (matchId: string) => api.bunkers.create(bunkerName, { matchId }),
     onSuccess: (r) => { setShowCreateBunker(''); setBunkerName(''); navigate(`/bunkers/${r.bunker.id}`); },
     onError: (err: any) => alert(err.message || 'Failed to create private room'),
   });
