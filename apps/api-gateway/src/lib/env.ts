@@ -5,7 +5,7 @@
  * Use these instead of checking config.NODE_ENV directly.
  */
 
-import { config } from '../config';
+import { config } from '../config.js';
 
 /** True when NODE_ENV is 'development' */
 export const isDev = (): boolean => config.NODE_ENV === 'development';

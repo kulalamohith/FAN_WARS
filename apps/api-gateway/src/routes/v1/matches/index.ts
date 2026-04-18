@@ -4,7 +4,7 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../lib/db';
+import { db } from '../../../lib/db.js';
 
 export const matchesRoutes: FastifyPluginAsync = async (fastify) => {
 

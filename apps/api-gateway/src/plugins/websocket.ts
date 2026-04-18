@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import fp from 'fastify-plugin';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Redis } from 'ioredis';
-import { awardPoints, POINT_VALUES } from '../lib/points';
+import { awardPoints, POINT_VALUES } from '../lib/points.js';
 
 declare module 'fastify' {
   interface FastifyInstance {

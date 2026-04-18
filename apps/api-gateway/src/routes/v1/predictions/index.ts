@@ -4,8 +4,8 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../lib/db';
-import { awardPoints, batchAwardPoints, POINT_VALUES } from '../../../lib/points';
+import { db } from '../../../lib/db.js';
+import { awardPoints, batchAwardPoints, POINT_VALUES } from '../../../lib/points.js';
 
 export const predictionsRoutes: FastifyPluginAsync = async (fastify) => {
   const paramsSchema = z.object({

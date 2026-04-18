@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { db } from '../../../lib/db';
+import { db } from '../../../lib/db.js';
 
 export async function armiesRoutes(fastify: FastifyInstance) {
   // --- GET All Armies (/v1/armies) ---

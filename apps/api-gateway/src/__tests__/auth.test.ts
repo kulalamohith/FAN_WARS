@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { buildApp } from '../app';
-import { db } from '../lib/db';
+import { buildApp } from '../app.js';
+import { db } from '../lib/db.js';
 import { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;

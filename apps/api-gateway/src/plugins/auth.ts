@@ -7,8 +7,8 @@
 
 import fp from 'fastify-plugin';
 import fastifyJwt from '@fastify/jwt';
-import { config } from '../config';
-import { db } from '../lib/db';
+import { config } from '../config.js';
+import { db } from '../lib/db.js';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 // Using FastifyJWT interface to properly type request.user

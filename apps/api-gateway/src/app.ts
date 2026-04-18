@@ -6,6 +6,7 @@
  */
 
 import path from 'path';
+import { fileURLToPath } from 'url';
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -19,21 +20,25 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
-import { config } from './config';
-import authPlugin from './plugins/auth';
-import websocketPlugin from './plugins/websocket';
-import { authRoutes } from './routes/v1/auth';
-import { matchesRoutes } from './routes/v1/matches';
-import { warRoomRoutes } from './routes/v1/war-rooms';
-import { predictionsRoutes } from './routes/v1/predictions';
-import { leaderboardRoutes } from './routes/v1/leaderboard';
-import { roastsRoutes } from './routes/v1/roasts';
-import { armiesRoutes } from './routes/v1/armies';
-import { bunkersRoutes } from './routes/v1/bunkers';
-import { postsRoutes } from './routes/v1/posts';
-import { profileRoutes } from './routes/v1/profile';
-import { adminRoutes } from './routes/v1/admin';
-import { duelsRoutes } from './routes/v1/duels';
+import { config } from './config.js';
+import authPlugin from './plugins/auth.js';
+import websocketPlugin from './plugins/websocket.js';
+import { authRoutes } from './routes/v1/auth/index.js';
+import { matchesRoutes } from './routes/v1/matches/index.js';
+import { warRoomRoutes } from './routes/v1/war-rooms/index.js';
+import { predictionsRoutes } from './routes/v1/predictions/index.js';
+import { leaderboardRoutes } from './routes/v1/leaderboard/index.js';
+import { roastsRoutes } from './routes/v1/roasts/index.js';
+import { armiesRoutes } from './routes/v1/armies/index.js';
+import { bunkersRoutes } from './routes/v1/bunkers/index.js';
+import { postsRoutes } from './routes/v1/posts/index.js';
+import { profileRoutes } from './routes/v1/profile/index.js';
+import { adminRoutes } from './routes/v1/admin/index.js';
+import { duelsRoutes } from './routes/v1/duels/index.js';
+
+// ESM polyfill for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Builds a fully configured Fastify instance.

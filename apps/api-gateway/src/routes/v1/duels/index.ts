@@ -5,8 +5,8 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../lib/db';
-import { awardPoints, POINT_VALUES } from '../../../lib/points';
+import { db } from '../../../lib/db.js';
+import { awardPoints, POINT_VALUES } from '../../../lib/points.js';
 
 /**
  * Lazy verdict resolver: checks if a duel's voting period has ended

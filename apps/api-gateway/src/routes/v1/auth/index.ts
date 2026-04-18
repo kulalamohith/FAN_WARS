@@ -10,9 +10,9 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { db } from '../../../lib/db';
-import { calculateRank } from '../../../lib/ranks';
-import { sendOtpEmail } from '../../../lib/email';
+import { db } from '../../../lib/db.js';
+import { calculateRank } from '../../../lib/ranks.js';
+import { sendOtpEmail } from '../../../lib/email.js';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
 

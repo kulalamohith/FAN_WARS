@@ -5,8 +5,8 @@
  * This file is the process entry point (tsx watch / node dist/server.js).
  */
 
-import { buildApp } from './app';
-import { config } from './config';
+import { buildApp } from './app.js';
+import { config } from './config.js';
 
 async function start(): Promise<void> {
   const app = await buildApp();

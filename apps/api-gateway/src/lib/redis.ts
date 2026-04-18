@@ -13,7 +13,7 @@
  */
 
 import Redis from 'ioredis';
-import { config } from '../config';
+import { config } from '../config.js';
 
 /** Singleton Redis instance. null until first getRedis() call. */
 let redisClient: Redis | null = null;

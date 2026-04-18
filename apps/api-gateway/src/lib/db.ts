@@ -9,7 +9,7 @@
 
 // Prisma Client — includes: User, Army, Match, WarRoom, Prediction, Roast, Bunker, Post, PostReaction
 import { PrismaClient } from '@prisma/client';
-import { isProd } from './env';
+import { isProd } from './env.js';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting database connection limits during hot-reloading (common in TSX/Node dev).

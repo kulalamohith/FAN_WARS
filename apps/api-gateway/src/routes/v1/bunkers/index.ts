@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../lib/db';
-import { awardPoints, POINT_VALUES } from '../../../lib/points';
+import { db } from '../../../lib/db.js';
+import { awardPoints, POINT_VALUES } from '../../../lib/points.js';
 
 const createBunkerSchema = z.object({
   name: z.string().min(3).max(50),

@@ -3,9 +3,9 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
-import { db } from '../../../lib/db';
-import { calculateRank } from '../../../lib/ranks';
-import { getRedis } from '../../../lib/redis';
+import { db } from '../../../lib/db.js';
+import { calculateRank } from '../../../lib/ranks.js';
+import { getRedis } from '../../../lib/redis.js';
 
 const CACHE_TTL = 60; // seconds
 

@@ -9,13 +9,18 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { db } from '../../../lib/db';
-import { getRankInfo, getRankProgress, WARZONE_RANKS } from '../../../lib/ranks';
-import { awardPoints, POINT_VALUES } from '../../../lib/points';
+import { db } from '../../../lib/db.js';
+import { getRankInfo, getRankProgress, WARZONE_RANKS } from '../../../lib/ranks.js';
+import { awardPoints, POINT_VALUES } from '../../../lib/points.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { pipeline } from 'stream/promises';
 import { randomUUID } from 'crypto';
+
+// ESM polyfill for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const profileRoutes: FastifyPluginAsync = async (fastify) => {
 

@@ -9,8 +9,8 @@
  *  - batchAwardPoints uses Promise.all for parallel execution.
  */
 
-import { db } from './db';
-import { getRedis } from './redis';
+import { db } from './db.js';
+import { getRedis } from './redis.js';
 
 // ─── Point Source Types ───
 export type PointSource =
