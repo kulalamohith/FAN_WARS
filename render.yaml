@@ -36,7 +36,7 @@ services:
   # ─── Web Frontend Service ───────────────────────────────
   - type: web
     name: fan-wars-web
-    env: docker
+    runtime: docker
     plan: free
     dockerContext: .
     dockerfilePath: apps/web/Dockerfile
@@ -44,14 +44,12 @@ services:
       - key: VITE_API_URL
         value: https://replace-this-after-deploy.onrender.com/api/v1
     buildArgs:
-      - key: VITE_API_URL
-        value: https://replace-this-after-deploy.onrender.com/api/v1
+      VITE_API_URL: https://replace-this-after-deploy.onrender.com/api/v1
 
   # ─── Managed Redis Service ──────────────────────────────
   - type: redis
     name: fan-wars-redis
     plan: free
-    ipAllowList: []
 
 databases:
   - name: fan-wars-db
