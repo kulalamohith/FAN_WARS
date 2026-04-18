@@ -15,7 +15,7 @@ RUN npm install --workspace=@warzone/api-gateway
 COPY apps/api-gateway ./apps/api-gateway
 
 # Generate Prisma client
-RUN npx --prefix apps/api-gateway prisma generate
+RUN npx prisma generate --schema apps/api-gateway/prisma/schema.prisma
 
 # Compile TypeScript
 RUN npm run build --workspace=@warzone/api-gateway
@@ -39,4 +39,4 @@ USER warzone
 EXPOSE 3000
 
 # Run database push to ensure schema is up-to-date, then start the cluster
-CMD npx prisma db push --accept-data-loss && node dist/cluster.js
+CMD npx prisma db push --accept-data-loss --schema prisma/schema.prisma && node dist/cluster.js
