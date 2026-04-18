@@ -27,17 +27,21 @@ RUN addgroup -S warzone && adduser -S warzone -G warzone
 
 WORKDIR /app
 
-# Copy package files again to perform a fresh production install
+# Maintain exact monorepo structure to ensure ESM module resolution integrity
 COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/apps/api-gateway/package.json ./apps/api-gateway/package.json
-COPY --from=builder /app/apps/api-gateway/prisma ./prisma
+COPY --from=builder /app/apps/api-gateway/prisma ./apps/api-gateway/prisma
 
-# Install ONLY production dependencies for the api-gateway workspace
-# This ensures a correct, stable node_modules structure in the final image.
+# Install ONLY production dependencies
 RUN npm install --omit=dev --workspace=@warzone/api-gateway
 
-# Copy built code
-COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/dist ./dist
+# Copy built code to its original workspace path
+COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/dist ./apps/api-gateway/dist
+
+# --- VERIFICATION STEP ---
+# Fail build if @fastify/static is missing or resolution is broken
+RUN find /app -name "@fastify"
+RUN cd apps/api-gateway && npm ls @fastify/static
 
 # Ensure directory is owned by warzone
 RUN chown -R warzone:warzone /app
@@ -46,5 +50,8 @@ USER warzone
 
 EXPOSE 3000
 
-# Run database push then start
+# Set working directory to the workspace for runtime context
+WORKDIR /app/apps/api-gateway
+
+# Run database push then start from the workspace context
 CMD npx prisma db push --accept-data-loss --schema prisma/schema.prisma && node dist/cluster.js
