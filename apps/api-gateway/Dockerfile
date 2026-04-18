@@ -23,17 +23,18 @@ RUN npm run build --workspace=@warzone/api-gateway
 # ─── Stage 2: Production Runtime ──────────────────────────
 FROM node:20-alpine AS runner
 
-WORKDIR /app
-
-# Copy built app and ALL node_modules (including hoisted root modules)
-COPY --from=builder /app/apps/api-gateway/dist ./dist
-COPY --from=builder /app/apps/api-gateway/package.json ./package.json
-COPY --from=builder /app/apps/api-gateway/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/api-gateway/node_modules ./apps/api-gateway/node_modules
-
 # Non-root user for security
 RUN addgroup -S warzone && adduser -S warzone -G warzone
+
+WORKDIR /app
+
+# Copy built app and ALL node_modules with correct ownership
+COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/dist ./dist
+COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/package.json ./package.json
+COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/prisma ./prisma
+COPY --from=builder --chown=warzone:warzone /app/node_modules ./node_modules
+COPY --from=builder --chown=warzone:warzone /app/apps/api-gateway/node_modules ./apps/api-gateway/node_modules
+
 USER warzone
 
 EXPOSE 3000
