@@ -43,7 +43,7 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://replace-this-after-deploy.onrender.com/api/v1
-    dockerBuildArgs:
+    buildArgs:
       - key: VITE_API_URL
         value: https://replace-this-after-deploy.onrender.com/api/v1
 
