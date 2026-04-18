@@ -1,43 +1,41 @@
 services:
   - type: web
-    name: fan-wars-api
-    runtime: docker
-    plan: free
-    dockerContext: .
-    dockerfilePath: apps/api-gateway/Dockerfile
+    name: "fan-wars-api"
+    runtime: "docker"
+    plan: "free"
+    dockerContext: "."
+    dockerfilePath: "apps/api-gateway/Dockerfile"
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
+      - key: "NODE_ENV"
+        value: "production"
+      - key: "DATABASE_URL"
         fromDatabase:
-          name: fan-wars-db
-          property: connectionString
-      - key: REDIS_URL
+          name: "fan-wars-db"
+          property: "connectionString"
+      - key: "REDIS_URL"
         fromService:
-          name: fan-wars-redis
-          property: connectionString
-      - key: JWT_SECRET
+          name: "fan-wars-redis"
+          property: "connectionString"
+      - key: "JWT_SECRET"
         generateValue: true
-      - key: CLUSTER_WORKERS
-        value: 1
 
   - type: web
-    name: fan-wars-web
-    runtime: docker
-    plan: free
-    dockerContext: .
-    dockerfilePath: apps/web/Dockerfile
+    name: "fan-wars-web"
+    runtime: "docker"
+    plan: "free"
+    dockerContext: "."
+    dockerfilePath: "apps/web/Dockerfile"
     envVars:
-      - key: VITE_API_URL
-        value: https://replace-this-after-deploy.onrender.com/api/v1
+      - key: "VITE_API_URL"
+        value: "https://replace-this-after-deploy.onrender.com/api/v1"
     buildArgs:
-      VITE_API_URL: https://replace-this-after-deploy.onrender.com/api/v1
+      VITE_API_URL: "https://replace-this-after-deploy.onrender.com/api/v1"
 
   - type: keyvalue
-    name: fan-wars-redis
-    plan: free
+    name: "fan-wars-redis"
+    plan: "free"
     ipAllowList: []
 
 databases:
-  - name: fan-wars-db
-    plan: free
+  - name: "fan-wars-db"
+    plan: "free"
