@@ -12,7 +12,15 @@
 import cluster from 'cluster';
 import os from 'os';
 
-const WORKERS = parseInt(process.env.CLUSTER_WORKERS || String(os.cpus().length), 10);
+// In production (especially Render), cap workers to 2 to avoid resource exhaustion and port binding race conditions.
+const isProd = process.env.NODE_ENV === 'production';
+const MAX_PROD_WORKERS = 2;
+const osCpus = os.cpus().length;
+const WORKERS = parseInt(
+  process.env.CLUSTER_WORKERS || 
+  String(isProd ? Math.min(osCpus, MAX_PROD_WORKERS) : osCpus), 
+  10
+);
 
 if (cluster.isPrimary) {
   console.log(`⚔️  WARZONE Cluster Master PID ${process.pid} starting ${WORKERS} workers...`);

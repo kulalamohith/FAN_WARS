@@ -37,9 +37,15 @@ async function start(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
+import { fileURLToPath } from 'url';
+
 // Export for cluster.ts workers
 export { start };
 
-// Start directly when this file is the entry point
-start();
+// Start directly ONLY when this file is the main entry point (not when imported as a worker)
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === (process.platform === 'win32' ? process.argv[1].replace(/\\/g, '/') : process.argv[1]);
+
+if (isMain) {
+  start();
+}
 
