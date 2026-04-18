@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const baseApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// Ensure no trailing slash for consistency
+const API_URL = baseApiUrl.endsWith('/') ? baseApiUrl.slice(0, -1) : baseApiUrl;
 
 export interface ChatMessage {
   id: string;

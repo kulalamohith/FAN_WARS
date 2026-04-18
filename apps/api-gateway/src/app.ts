@@ -58,9 +58,17 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // --- Security & CORS ---
   await app.register(helmet, { global: true });
+  
+  // Parse CORS_ORIGIN into an array if it contains commas, or keep as string/boolean
+  const corsOrigin = config.CORS_ORIGIN.includes(',') 
+    ? config.CORS_ORIGIN.split(',').map(o => o.trim())
+    : config.CORS_ORIGIN === '*' ? true : config.CORS_ORIGIN;
+
   await app.register(cors, {
-    origin: config.CORS_ORIGIN,
+    origin: corsOrigin,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
   // --- Rate Limiting ---

@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-const WS_URL = API_URL.replace('/api/v1', '');
+const baseApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+// Ensure no trailing slash for consistency
+const API_URL = baseApiUrl.endsWith('/') ? baseApiUrl.slice(0, -1) : baseApiUrl;
+// Extract WS_URL by removing /api/v1 (or just root if not present)
+const WS_URL = API_URL.includes('/api/v1') ? API_URL.replace('/api/v1', '') : API_URL;
 
 const CHALLENGE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
