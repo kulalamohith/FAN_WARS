@@ -16,7 +16,9 @@ export const sendOtpEmail = async (to: string, otp: string) => {
     return true;
   }
 
-  const bannerUrl = `http://${config.HOST === '0.0.0.0' ? 'localhost' : config.HOST}:${config.PORT}/email/rivalry-banner.png`;
+  // Use PUBLIC_URL for production emails, fallback to local for dev
+  const publicUrl = process.env.PUBLIC_URL || `http://localhost:${config.PORT}`;
+  const bannerUrl = `${publicUrl}/email/rivalry-banner.png`;
 
   const html = `
     <!DOCTYPE html>
