@@ -2,7 +2,7 @@ services:
   # ─── API Gateway Service ─────────────────────────────────
   - type: web
     name: fan-wars-api
-    env: docker
+    runtime: docker
     plan: free
     dockerContext: .
     dockerfilePath: apps/api-gateway/Dockerfile
@@ -15,7 +15,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: fan-wars-redis
           property: connectionString
       - key: JWT_SECRET
@@ -46,10 +46,11 @@ services:
     buildArgs:
       VITE_API_URL: https://replace-this-after-deploy.onrender.com/api/v1
 
-  # ─── Managed Redis Service ──────────────────────────────
-  - type: redis
+  # ─── Managed Redis (Key Value) Service ──────────────────
+  - type: keyvalue
     name: fan-wars-redis
     plan: free
+    ipAllowList: []
 
 databases:
   - name: fan-wars-db
