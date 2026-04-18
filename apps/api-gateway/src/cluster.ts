@@ -33,7 +33,7 @@ if (cluster.isPrimary) {
   });
 } else {
   // This is a worker process — start the actual Fastify app
-  import('./server').then(({ start }) => {
+  import('./server.js').then(({ start }) => {
     start().catch((err) => {
       console.error('Worker failed to start:', err);
       process.exit(1);
