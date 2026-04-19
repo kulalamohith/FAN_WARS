@@ -25,7 +25,7 @@ const BunkerJinxCard: React.FC<JinxProps> = ({
   isComplete,
   onTap
 }) => {
-  const [timeLeft, setTimeLeft] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(20);
   const [userSide, setUserSide] = useState<'A' | 'B' | null>(null);
   const lastTapRef = useRef<number>(0);
   const tapCountInSecRef = useRef<number>(0);

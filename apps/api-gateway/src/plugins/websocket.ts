@@ -273,7 +273,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
           question,
           options,
           votesCount: options.map(() => 0),
-          expiresAt: new Date(Date.now() + 12000), // 12 seconds
+          expiresAt: new Date(Date.now() + 40000), // 40 seconds
         }
       });
 
@@ -336,7 +336,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         } catch (err) {
           fastify.log.error(`[Prediction Closure] Failed to close ${prediction.id}: ${err}`);
         }
-      }, 13000);
+      }, 41000); // 41s to allow for network delay
     });
 
     socket.on('bunker_prediction_vote', async (data: { predictionId: string; choice: number; userId: string; bunkerId: string }) => {
@@ -399,7 +399,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         prompt,
         countA: 0,
         countB: 0,
-        expiresAt: new Date(Date.now() + 15000), // 15s Battle
+        expiresAt: new Date(Date.now() + 20000), // 20s Battle
         createdAt
       };
 
@@ -407,7 +407,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         ...jinxPayload,
         creatorId: userId,
         taps: {},
-        endTime: Date.now() + 5000,
+        endTime: Date.now() + 20000,
         expiresAt: jinxPayload.expiresAt // for consistency
       };
       
@@ -483,7 +483,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         });
 
         delete activeBunkerJinx[bunkerId];
-      }, 5500); // 5.5s to account for slight latency
+      }, 21000); // 21s to account for slight latency
     });
 
     socket.on('bunker_jinx_tap', (data: { bunkerId: string; userId: string; side: 'A' | 'B' }) => {

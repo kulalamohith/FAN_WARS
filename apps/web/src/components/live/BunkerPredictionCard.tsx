@@ -169,7 +169,7 @@ const BunkerPredictionCard: React.FC<PredictionProps> = ({
       </div>
 
       <AnimatePresence>
-        {showSealedOverlay && !isComplete && (
+        {showSealedOverlay && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
