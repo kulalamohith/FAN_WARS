@@ -43,6 +43,9 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('WarzoneHQ <noreply@warzone.com>'),
+
+  // --- Production Ops ---
+  TRUST_PROXY: z.coerce.boolean().default(false),
 });
 
 // Validate and parse — throws immediately if invalid

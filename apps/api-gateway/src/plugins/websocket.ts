@@ -17,9 +17,15 @@ declare module 'fastify' {
  */
 const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
   // Attach socket.io to the underlying Node HTTP server
+  // Sync CORS origin with main API logic
+  const corsOriginEnv = process.env.CORS_ORIGIN || '*';
+  const corsOrigin = corsOriginEnv.includes(',')
+    ? corsOriginEnv.split(',').map(o => o.trim())
+    : corsOriginEnv === '*' ? true : corsOriginEnv;
+
   const io = new Server(fastify.server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+      origin: corsOrigin,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
     },

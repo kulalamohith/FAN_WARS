@@ -69,10 +69,14 @@ export default function LoginPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.email) setEmail(parsed.email);
-        if (parsed.step && parsed.step.startsWith('signup-')) setStep(parsed.step);
-        if (parsed.selectedArmy) setSelectedArmy(parsed.selectedArmy);
-        if (parsed.username) setUsername(parsed.username);
+        if (parsed.step && parsed.step.startsWith('signup-')) {
+          setStep(parsed.step);
+          if (parsed.email) setEmail(parsed.email);
+          if (parsed.selectedArmy) setSelectedArmy(parsed.selectedArmy);
+          if (parsed.username) setUsername(parsed.username);
+          if (parsed.password) setPassword(parsed.password);
+          if (parsed.confirmPassword) setConfirmPassword(parsed.confirmPassword);
+        }
       } catch (e) {
         console.error('Failed to restore signup state:', e);
       }
@@ -104,10 +108,20 @@ export default function LoginPage() {
   useEffect(() => {
     if (step.startsWith('signup-')) {
       sessionStorage.setItem('wz_signup_state', JSON.stringify({
-        email, step, selectedArmy, username
+        email, step, selectedArmy, username, password, confirmPassword
       }));
     }
-  }, [email, step, selectedArmy, username]);
+  }, [email, step, selectedArmy, username, password, confirmPassword]);
+
+  // ── STEP GUARD ──
+  useEffect(() => {
+    // If we are on a late signup step but missing basic credentials, go back
+    if (step === 'signup-draft' || step === 'signup-username') {
+      if (!email || !password) {
+        setStep('signup-email');
+      }
+    }
+  }, [step, email, password]);
 
   const clearForm = () => {
     setEmail(''); setPassword(''); setConfirmPassword('');

@@ -46,6 +46,7 @@ const __dirname = path.dirname(__filename);
  */
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
+    trustProxy: config.TRUST_PROXY,
     logger: {
       level: config.LOG_LEVEL,
       // Pretty print in development, JSON in production

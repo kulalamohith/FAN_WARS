@@ -3,9 +3,11 @@
  * Centralized fetch wrapper for all backend calls.
  */
 
-const rawBase = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-// Ensure no trailing slash to avoid double slashes in paths like ${BASE}${url}
-const BASE = rawBase.endsWith('/') ? rawBase.slice(0, -1) : rawBase;
+const rawBase = import.meta.env.VITE_API_URL || '';
+// Ensure no trailing slash. If empty, default to current origin's /api/v1
+const BASE = rawBase 
+  ? (rawBase.endsWith('/') ? rawBase.slice(0, -1) : rawBase)
+  : `${window.location.origin}/api/v1`;
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('wz_token');
