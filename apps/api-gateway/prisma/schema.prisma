@@ -49,6 +49,9 @@ model User {
   roasts            Roast[]
   userBadges        UserBadge[]
   army              Army               @relation(fields: [armyId], references: [id])
+  bunkerVotes       BunkerPredictionVote[]
+  bunkerPredictions BunkerPrediction[]
+  bunkerJinxes      BunkerJinxBattle[]
 
   @@index([armyId])
   @@index([totalWarPoints])
@@ -166,6 +169,8 @@ model Bunker {
   members    BunkerMember[]
   creator    User           @relation("BunkerCreator", fields: [creatorId], references: [id])
   match      Match          @relation(fields: [matchId], references: [id])
+  predictions BunkerPrediction[]
+  jinxBattles BunkerJinxBattle[]
 
   @@map("bunkers")
 }
