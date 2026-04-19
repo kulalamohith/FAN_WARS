@@ -69,6 +69,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
   const activeBunkerPredictions: Record<string, any> = {};
   const activeBunkerJinx: Record<string, { 
     id: string;
+    type: string;
     prompt: string;
     creatorId: string;
     creatorName: string;
@@ -76,6 +77,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     countB: number; 
     taps: Record<string, number>; // userId -> tapCount
     endTime: number;
+    expiresAt: Date;
   }> = {};
   
   // Rate limiting for Jinx taps (15/sec)
@@ -342,7 +344,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
           return socket.emit('error', { message: 'Insufficient War Points (Need 5 WP)' });
         }
       } else {
-        await awardPoints(userId, 0.0001, 'BUNKER_JINX_TRIGGER' as any, `jinx_free_${bunkerId}_${Date.now()}`);
+        await awardPoints(userId, 0, 'BUNKER_JINX_TRIGGER' as any, `jinx_free_${bunkerId}_${Date.now()}`);
       }
 
       const battleId = `jinx_${Date.now()}`;
