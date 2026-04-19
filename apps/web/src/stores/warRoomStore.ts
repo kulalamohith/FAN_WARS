@@ -43,6 +43,9 @@ interface WarRoomState {
   activeAdminEvent: { type: string; data: any } | null;
   isBunkerEnded: boolean;
   kickedUserId: string | null;
+
+  // --- Bunker Interactive ---
+  bunkerInteractiveEvents: any[]; // List of active/recent interactive cards
   
   // Actions
   connect: (matchId: string, userId?: string) => void;
@@ -53,6 +56,12 @@ interface WarRoomState {
   joinBunker: (bunkerId: string) => void;
   leaveBunker: (bunkerId: string) => void;
   sendBunkerMessage: (payload: { bunkerId: string; text: string; userId: string; username: string; rank: string; armyId: string }) => void;
+  
+  // Interactive Actions
+  triggerBunkerPrediction: (data: any) => void;
+  voteBunkerPrediction: (data: any) => void;
+  triggerBunkerJinx: (data: any) => void;
+  tapBunkerJinx: (data: any) => void;
 
   removePrediction: (id: string) => void;
   removeReaction: (id: string) => void;
@@ -164,6 +173,37 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       set({ isBunkerEnded: true });
     });
 
+    // --- Bunker Interactive Listeners ---
+    socket.on('bunker_interactive_event', (event: any) => {
+      set((state) => ({
+        bunkerInteractiveEvents: [event, ...state.bunkerInteractiveEvents].slice(0, 10)
+      }));
+    });
+
+    socket.on('bunker_prediction_sync', (data: { id: string, votesA: number, votesB: number }) => {
+      set((state) => ({
+        bunkerInteractiveEvents: state.bunkerInteractiveEvents.map(e => 
+          e.id === data.id ? { ...e, votesA: data.votesA, votesB: data.votesB } : e
+        )
+      }));
+    });
+
+    socket.on('bunker_jinx_sync', (data: { id: string, countA: number, countB: number }) => {
+      set((state) => ({
+        bunkerInteractiveEvents: state.bunkerInteractiveEvents.map(e => 
+          e.id === data.id ? { ...e, countA: data.countA, countB: data.countB } : e
+        )
+      }));
+    });
+
+    socket.on('bunker_jinx_result', (data: { id: string, countA: number, countB: number, winner: string }) => {
+      set((state) => ({
+        bunkerInteractiveEvents: state.bunkerInteractiveEvents.map(e => 
+          e.id === data.id ? { ...e, countA: data.countA, countB: data.countB, winner: data.winner, isComplete: true } : e
+        )
+      }));
+    });
+
     set({ socket });
   },
 
@@ -171,7 +211,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.disconnect();
-      set({ socket: null, isConnected: false, messages: [], liveReactions: [] });
+      set({ socket: null, isConnected: false, messages: [], liveReactions: [], bunkerInteractiveEvents: [] });
     }
   },
 
@@ -190,12 +230,11 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   },
 
   joinBunker: (bunkerId) => {
-    set({ pendingBunkerId: bunkerId, bunkerMessages: [] });
+    set({ pendingBunkerId: bunkerId, bunkerMessages: [], bunkerInteractiveEvents: [] });
     const { socket } = get();
     if (socket && get().isConnected) {
       socket.emit('join_bunker', bunkerId);
     }
-    // If not connected yet, it will be emitted in the 'connect' handler
   },
 
   leaveBunker: (bunkerId) => {
@@ -210,6 +249,27 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     if (socket && get().isConnected) {
       socket.emit('send_bunker_message', payload);
     }
+  },
+
+  // --- Interactive Actions ---
+  triggerBunkerPrediction: (data) => {
+    const { socket } = get();
+    if (socket && get().isConnected) socket.emit('bunker_prediction_create', data);
+  },
+
+  voteBunkerPrediction: (data) => {
+    const { socket } = get();
+    if (socket && get().isConnected) socket.emit('bunker_prediction_vote', data);
+  },
+
+  triggerBunkerJinx: (data) => {
+    const { socket } = get();
+    if (socket && get().isConnected) socket.emit('bunker_jinx_start', data);
+  },
+
+  tapBunkerJinx: (data) => {
+    const { socket } = get();
+    if (socket && get().isConnected) socket.emit('bunker_jinx_tap', data);
   },
 
   removePrediction: (id: string) => {
@@ -231,6 +291,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   reset: () => set({ 
     messages: [], 
     bunkerMessages: [], 
+    bunkerInteractiveEvents: [],
     toxicityHome: 50, 
     toxicityAway: 50, 
     activePredictions: [], 

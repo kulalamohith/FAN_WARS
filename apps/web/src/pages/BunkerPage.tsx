@@ -11,6 +11,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useWarRoomStore } from '../stores/warRoomStore';
 import QuickProfileModal, { QuickProfileUser } from '../components/ui/QuickProfileModal';
 import DuelInviteModal from '../components/features/duels/DuelInviteModal';
+import BunkerPredictionCard from '../components/live/BunkerPredictionCard';
+import BunkerJinxCard from '../components/live/BunkerJinxCard';
 
 export default function BunkerPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,13 +20,19 @@ export default function BunkerPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   
-  const { connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, activeAdminEvent, isConnected } = useWarRoomStore();
+  const { 
+    connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, 
+    activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, 
+    activeAdminEvent, isConnected, bunkerInteractiveEvents,
+    triggerBunkerPrediction, voteBunkerPrediction, triggerBunkerJinx, tapBunkerJinx
+  } = useWarRoomStore();
 
   const [votedPredictions, setVotedPredictions] = useState<Set<string>>(new Set());
   const [chatInput, setChatInput] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showTriggerMenu, setShowTriggerMenu] = useState(false);
   const [profileUser, setProfileUser] = useState<QuickProfileUser | null>(null);
 
   const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
@@ -145,6 +153,36 @@ export default function BunkerPage() {
     });
     
     setChatInput('');
+  };
+
+  const handleTriggerPrediction = () => {
+    const question = window.prompt("Enter your prediction question:", "Will Virat Kohli hit a six in the next 3 balls?");
+    if (!question) return;
+    const optionA = "YES";
+    const optionB = "NO";
+    
+    triggerBunkerPrediction({
+      bunkerId: id,
+      userId: user?.id,
+      username: user?.username,
+      question,
+      optionA,
+      optionB
+    });
+    setShowTriggerMenu(false);
+  };
+
+  const handleTriggerJinx = () => {
+    const prompt = window.prompt("Enter Jinx prompt:", "Kohli will get out now!");
+    if (!prompt) return;
+    
+    triggerBunkerJinx({
+      bunkerId: id,
+      userId: user?.id,
+      username: user?.username,
+      prompt
+    });
+    setShowTriggerMenu(false);
   };
 
   const getStormEmoji = (type: string | null) => {
@@ -301,6 +339,11 @@ export default function BunkerPage() {
                 CODE: <strong className="select-all tracking-wider">{bunker.inviteCode}</strong>
               </span>
             </div>
+
+            <button onClick={() => setShowTriggerMenu(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-wz-red/20 border border-wz-red/30 hover:bg-wz-red hover:text-white flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
+              <span className="text-xl">⚡</span>
+              <span className="text-[10px] sm:text-xs font-mono font-bold text-white/80">TRIGGER HUB</span>
+            </button>
 
             <button onClick={() => setShowMembersModal(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
               <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-wz-neon animate-pulse" />
@@ -527,6 +570,58 @@ export default function BunkerPage() {
           </div>
         </div>
       </div>
+
+      {/* === Trigger Menu Modal === */}
+      <AnimatePresence>
+        {showTriggerMenu && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-5" onClick={() => setShowTriggerMenu(false)}>
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-md bg-gradient-to-b from-[#1A0B2E] to-black rounded-3xl border border-wz-red/30 p-8 shadow-[0_0_50px_rgba(255,69,58,0.2)]">
+              <div className="text-center mb-8">
+                <span className="text-wz-red text-[10px] font-mono font-black tracking-[0.4em] uppercase mb-2 block">ELITE COMMAND HUB</span>
+                <h2 className="text-white text-2xl font-display font-black">ACTIVATE ROOM EVENT</h2>
+                <div className="flex justify-center gap-4 mt-2">
+                  <span className="text-[10px] font-mono text-white/40">WAR POINTS: <span className="text-wz-yellow">{user?.totalWarPoints || 0} WP</span></span>
+                  <div className="w-[1px] h-3 bg-white/10" />
+                  <span className="text-[10px] font-mono text-white/40">FREE TRIPS: <span className="text-wz-neon">RESET DAILY</span></span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <button 
+                  onClick={handleTriggerPrediction}
+                  className="group relative overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 transition-all hover:border-wz-yellow/50"
+                >
+                  <div className="flex items-center gap-4 relative z-10 transition-transform group-hover:scale-[1.02]">
+                    <div className="w-12 h-12 rounded-xl bg-wz-yellow/10 flex items-center justify-center text-2xl border border-wz-yellow/20 group-hover:bg-wz-yellow/20">🔮</div>
+                    <div className="text-left">
+                      <h4 className="text-white font-bold text-sm tracking-wide">LIVE PREDICTION</h4>
+                      <p className="text-white/40 text-[10px] font-mono">Create a YES/NO poll for everyone.</p>
+                      <span className="inline-block mt-1 text-[8px] px-2 py-0.5 bg-wz-yellow/20 text-wz-yellow rounded border border-wz-yellow/30 font-bold tracking-tighter uppercase">5 WP OR FREE 4/DAY</span>
+                    </div>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={handleTriggerJinx}
+                  className="group relative overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 transition-all hover:border-purple-500/50"
+                >
+                  <div className="flex items-center gap-4 relative z-10 transition-transform group-hover:scale-[1.02]">
+                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-2xl border border-purple-500/20 group-hover:bg-purple-500/20">🧿</div>
+                    <div className="text-left">
+                      <h4 className="text-white font-bold text-sm tracking-wide">JINX BATTLE</h4>
+                      <p className="text-white/40 text-[10px] font-mono">5s high-intensity tapping duel.</p>
+                      <span className="inline-block mt-1 text-[8px] px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 font-bold tracking-tighter uppercase">5 WP OR FREE 4/DAY</span>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <WarzoneButton variant="ghost" className="w-full mt-8 opacity-40 hover:opacity-100" onClick={() => setShowTriggerMenu(false)}>CLOSE HUB</WarzoneButton>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* === Members Modal === */}
       <AnimatePresence>

@@ -200,6 +200,52 @@ export async function awardPoints(
 }
 
 /**
+ * Get daily count for a source (exported for usage checks)
+ */
+export async function getDailyCountForUser(userId: string, source: PointSource): Promise<number> {
+  return getDailyCount(userId, source);
+}
+
+/**
+ * Spend War Points.
+ * 
+ * - Checks if user has enough points.
+ * - Atomically decrements totalWarPoints + creates audit log entry.
+ */
+export async function spendPoints(
+  userId: string,
+  amount: number,
+  source: string,
+  sourceId?: string,
+  metadata?: Record<string, any>
+): Promise<{ success: boolean; reason?: string }> {
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user) return { success: false, reason: 'user_not_found' };
+
+  if (BigInt(user.totalWarPoints) < BigInt(amount)) {
+    return { success: false, reason: 'insufficient_points' };
+  }
+
+  await db.$transaction([
+    db.user.update({
+      where: { id: userId },
+      data: { totalWarPoints: { decrement: amount } },
+    }),
+    db.pointsLog.create({
+      data: {
+        userId,
+        amount: -amount, // Negative for tracking
+        source,
+        sourceId: sourceId || null,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+      },
+    }),
+  ]);
+
+  return { success: true };
+}
+
+/**
  * Batch award points to multiple users for the same source.
  * Used for prediction resolution where many users earn at once.
  */

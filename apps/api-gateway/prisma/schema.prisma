@@ -324,3 +324,51 @@ model PointsLog {
   @@index([userId, sourceId])
   @@map("points_log")
 }
+
+model BunkerPrediction {
+  id           String   @id @default(uuid())
+  bunkerId     String
+  creatorId    String
+  question     String
+  optionA      String
+  optionB      String
+  votesA       Int      @default(0)
+  votesB       Int      @default(0)
+  status       String   @default("ACTIVE") // ACTIVE, CLOSED
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  bunker       Bunker   @relation(fields: [bunkerId], references: [id], onDelete: Cascade)
+  creator      User     @relation(fields: [creatorId], references: [id])
+  votes        BunkerPredictionVote[]
+
+  @@map("bunker_predictions")
+}
+
+model BunkerPredictionVote {
+  id           String           @id @default(uuid())
+  predictionId String
+  userId       String
+  option       String           // "A" or "B"
+  createdAt    DateTime         @default(now())
+  prediction   BunkerPrediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id])
+
+  @@unique([predictionId, userId])
+  @@map("bunker_prediction_votes")
+}
+
+model BunkerJinxBattle {
+  id          String   @id @default(uuid())
+  bunkerId    String
+  creatorId   String
+  prompt      String
+  countA      Int      @default(0) // JINXING
+  countB      Int      @default(0) // ANTI-JINXING
+  winner      String?
+  startedAt   DateTime @default(now())
+  expiresAt   DateTime
+  bunker      Bunker   @relation(fields: [bunkerId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [creatorId], references: [id])
+
+  @@map("bunker_jinx_battles")
+}
