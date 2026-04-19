@@ -30,7 +30,9 @@ export type PointSource =
   | 'STREAK_BONUS'
   | 'BUNKER_CREATE'
   | 'BUNKER_JOIN'
-  | 'TRAITOR_SWITCH';
+  | 'TRAITOR_SWITCH'
+  | 'BUNKER_PREDICTION_TRIGGER'
+  | 'BUNKER_JINX_TRIGGER';
 
 // ─── Point Values ───
 export const POINT_VALUES = {
@@ -65,6 +67,8 @@ export const DAILY_CAPS: Partial<Record<PointSource, number>> = {
   TUG_OF_WAR_TAP: 30,
   BUNKER_CREATE: 2,
   BUNKER_JOIN: 3,
+  BUNKER_PREDICTION_TRIGGER: 4,
+  BUNKER_JINX_TRIGGER: 4,
 };
 
 // ─── Helpers ───
@@ -150,7 +154,7 @@ export async function awardPoints(
   sourceId?: string,
   metadata?: Record<string, any>
 ): Promise<AwardResult> {
-  if (amount <= 0) {
+  if (amount < 0) {
     return { awarded: false, amount: 0, reason: 'invalid_amount' };
   }
 

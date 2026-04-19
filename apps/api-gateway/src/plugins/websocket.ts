@@ -195,13 +195,26 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     });
 
     // --- 🛡️ PRIVATE BUNKERS SYSTEM 🛡️ ---
-    // Join a private bunker room (clients will typically join BOTH the match room and the bunker room)
-    socket.on('join_bunker', (bunkerId: string) => {
+    socket.on('join_bunker', async (data: { bunkerId: string; userId: string }) => {
+      const { bunkerId, userId } = data;
       socket.join(`bunker_${bunkerId}`);
       fastify.log.info(`[Socket.IO] Client ${socket.id} joined bunker_${bunkerId}`);
 
       if (bunkerChatHistories[bunkerId]) {
         socket.emit('bunker_chat_history', bunkerChatHistories[bunkerId]);
+      }
+
+      // Sync active interactive events to joining client
+      socket.emit('bunker_active_state', {
+        prediction: activeBunkerPredictions[bunkerId],
+        jinx: activeBunkerJinx[bunkerId]
+      });
+      
+      // Also send current usage counts for the individual user
+      if (userId) {
+        const pCount = await getDailyCountForUser(userId, 'BUNKER_PREDICTION_TRIGGER' as any);
+        const jCount = await getDailyCountForUser(userId, 'BUNKER_JINX_TRIGGER' as any);
+        socket.emit('bunker_usage_sync', { predictionUses: pCount, jinxUses: jCount });
       }
     });
 
@@ -234,8 +247,8 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
     });
 
     // --- 🔮 BUNKER PREDICTIONS 🔮 ---
-    socket.on('bunker_prediction_create', async (data: { bunkerId: string; userId: string; username: string; question: string; optionA: string; optionB: string }) => {
-      const { bunkerId, userId, username, question, optionA, optionB } = data;
+    socket.on('bunker_prediction_create', async (data: { bunkerId: string; userId: string; username: string; question: string; options: string[] }) => {
+      const { bunkerId, userId, username, question, options } = data;
 
       // 1. Check Usage Limits
       const freeUsed = await getDailyCountForUser(userId, 'BUNKER_PREDICTION_TRIGGER' as any);
@@ -246,8 +259,8 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
           return socket.emit('error', { message: 'Insufficient War Points (Need 5 WP)' });
         }
       } else {
-        // Track free usage
-        await awardPoints(userId, 0.0001, 'BUNKER_PREDICTION_TRIGGER' as any, `pred_free_${bunkerId}_${Date.now()}`);
+        // Track free usage (0 points)
+        await awardPoints(userId, 0, 'BUNKER_PREDICTION_TRIGGER' as any, `pred_free_${bunkerId}_${Date.now()}`);
       }
 
       // 2. Create in DB
@@ -256,11 +269,10 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
           bunkerId,
           creatorId: userId,
           question,
-          optionA,
-          optionB,
+          options,
+          votesCount: options.map(() => 0),
           expiresAt: new Date(Date.now() + 60000), // 60 seconds
-        },
-        include: { creator: true }
+        }
       });
 
       const payload = {
@@ -268,37 +280,52 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         type: 'PREDICTION',
         creatorName: username,
         question: prediction.question,
-        optionA: prediction.optionA,
-        optionB: prediction.optionB,
-        votesA: 0,
-        votesB: 0,
+        options: prediction.options,
+        votesCount: prediction.votesCount,
         expiresAt: prediction.expiresAt,
       };
 
+      // 3. Store in memory and Broadcast to ALL
+      activeBunkerPredictions[bunkerId] = payload;
       io.to(`bunker_${bunkerId}`).emit('bunker_interactive_event', payload);
+      
+      // Update usage for the creator immediately
+      const pCount = await getDailyCountForUser(userId, 'BUNKER_PREDICTION_TRIGGER' as any);
+      socket.emit('bunker_usage_sync', { predictionUses: pCount });
     });
 
-    socket.on('bunker_prediction_vote', async (data: { predictionId: string; option: 'A' | 'B'; userId: string; bunkerId: string }) => {
-      const { predictionId, option, userId, bunkerId } = data;
+    socket.on('bunker_prediction_vote', async (data: { predictionId: string; choice: number; userId: string; bunkerId: string }) => {
+      const { predictionId, choice, userId, bunkerId } = data;
 
       try {
+        const pred = await db.bunkerPrediction.findUnique({ where: { id: predictionId } });
+        if (!pred || pred.status !== 'ACTIVE') return;
+
         await db.bunkerPredictionVote.create({
-          data: { predictionId, userId, option }
+          data: { predictionId, userId, choice }
         });
 
-        const updateData = option === 'A' ? { votesA: { increment: 1 } } : { votesB: { increment: 1 } };
+        // Update vote count array
+        const newVotes = [...pred.votesCount];
+        newVotes[choice]++;
+
         const updated = await db.bunkerPrediction.update({
           where: { id: predictionId },
-          data: updateData
+          data: { votesCount: newVotes }
         });
 
-        io.to(`bunker_${bunkerId}`).emit('bunker_prediction_sync', {
+        const syncPayload = {
           id: predictionId,
-          votesA: updated.votesA,
-          votesB: updated.votesB
-        });
+          votesCount: updated.votesCount
+        };
+
+        activeBunkerPredictions[bunkerId] = {
+          ...activeBunkerPredictions[bunkerId],
+          ...syncPayload
+        };
+
+        io.to(`bunker_${bunkerId}`).emit('bunker_prediction_sync', syncPayload);
       } catch (err) {
-        // Duplicate vote or error
         socket.emit('error', { message: 'Vote failed or already cast' });
       }
     });
@@ -319,24 +346,29 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
       }
 
       const battleId = `jinx_${Date.now()}`;
-      activeBunkerJinx[bunkerId] = {
-        id: battleId,
-        prompt,
-        creatorId: userId,
-        creatorName: username,
-        countA: 0,
-        countB: 0,
-        taps: {},
-        endTime: Date.now() + 5000,
-      };
-
-      io.to(`bunker_${bunkerId}`).emit('bunker_interactive_event', {
+      const jinxPayload = {
         id: battleId,
         type: 'JINX',
         creatorName: username,
         prompt,
+        countA: 0,
+        countB: 0,
         expiresAt: new Date(Date.now() + 5000),
-      });
+      };
+
+      activeBunkerJinx[bunkerId] = {
+        ...jinxPayload,
+        creatorId: userId,
+        taps: {},
+        endTime: Date.now() + 5000,
+        expiresAt: jinxPayload.expiresAt // for consistency
+      };
+      
+      io.to(`bunker_${bunkerId}`).emit('bunker_interactive_event', jinxPayload);
+
+      // Update usage for creator
+      const jCount = await getDailyCountForUser(userId, 'BUNKER_JINX_TRIGGER' as any);
+      socket.emit('bunker_usage_sync', { jinxUses: jCount });
 
       // Timer to end Jinx
       setTimeout(async () => {

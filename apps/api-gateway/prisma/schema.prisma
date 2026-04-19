@@ -335,10 +335,8 @@ model BunkerPrediction {
   bunkerId     String
   creatorId    String
   question     String
-  optionA      String
-  optionB      String
-  votesA       Int      @default(0)
-  votesB       Int      @default(0)
+  options      String[] // e.g. ["Yes", "No"] or ["0-10", "11-20", "20+"]
+  votesCount   Int[]    // Array of counts corresponding to options
   status       String   @default("ACTIVE") // ACTIVE, CLOSED
   expiresAt    DateTime
   createdAt    DateTime @default(now())
@@ -353,7 +351,7 @@ model BunkerPredictionVote {
   id           String           @id @default(uuid())
   predictionId String
   userId       String
-  option       String           // "A" or "B"
+  choice       Int              // Index in options array
   createdAt    DateTime         @default(now())
   prediction   BunkerPrediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
   user         User             @relation(fields: [userId], references: [id])

@@ -13,6 +13,7 @@ import QuickProfileModal, { QuickProfileUser } from '../components/ui/QuickProfi
 import DuelInviteModal from '../components/features/duels/DuelInviteModal';
 import BunkerPredictionCard from '../components/live/BunkerPredictionCard';
 import BunkerJinxCard from '../components/live/BunkerJinxCard';
+import { PredictionCreateModal, JinxCreateModal } from '../components/live/BunkerInteractiveModals';
 
 export default function BunkerPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,10 +25,13 @@ export default function BunkerPage() {
     connect, disconnect, joinBunker, leaveBunker, bunkerMessages, sendBunkerMessage, 
     activePredictions, liveReactions, sendReaction, kickedUserId, isBunkerEnded, 
     activeAdminEvent, isConnected, bunkerInteractiveEvents,
-    triggerBunkerPrediction, voteBunkerPrediction, triggerBunkerJinx, tapBunkerJinx
+    triggerBunkerPrediction, voteBunkerPrediction, triggerBunkerJinx, tapBunkerJinx,
+    predictionUses, jinxUses
   } = useWarRoomStore();
 
   const [votedPredictions, setVotedPredictions] = useState<Set<string>>(new Set());
+  const [showPredictionModal, setShowPredictionModal] = useState(false);
+  const [showJinxModal, setShowJinxModal] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -82,9 +86,9 @@ export default function BunkerPage() {
 
   // Connect to WebSocket using the bunker's matchId, and then join the bunker private room
   useEffect(() => {
-    if (bunker?.matchId && bunker?.id) {
-      connect(bunker.matchId);
-      joinBunker(bunker.id);
+    if (bunker?.matchId && bunker?.id && user?.id) {
+      connect(bunker.matchId, user.id);
+      joinBunker(bunker.id, user.id);
     }
     return () => {
       if (bunker?.id) leaveBunker(bunker.id);
@@ -156,32 +160,12 @@ export default function BunkerPage() {
   };
 
   const handleTriggerPrediction = () => {
-    const question = window.prompt("Enter your prediction question:", "Will Virat Kohli hit a six in the next 3 balls?");
-    if (!question) return;
-    const optionA = "YES";
-    const optionB = "NO";
-    
-    triggerBunkerPrediction({
-      bunkerId: id,
-      userId: user?.id,
-      username: user?.username,
-      question,
-      optionA,
-      optionB
-    });
+    setShowPredictionModal(true);
     setShowTriggerMenu(false);
   };
 
   const handleTriggerJinx = () => {
-    const prompt = window.prompt("Enter Jinx prompt:", "Kohli will get out now!");
-    if (!prompt) return;
-    
-    triggerBunkerJinx({
-      bunkerId: id,
-      userId: user?.id,
-      username: user?.username,
-      prompt
-    });
+    setShowJinxModal(true);
     setShowTriggerMenu(false);
   };
 
@@ -340,9 +324,14 @@ export default function BunkerPage() {
               </span>
             </div>
 
-            <button onClick={() => setShowTriggerMenu(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-wz-red/20 border border-wz-red/30 hover:bg-wz-red hover:text-white flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
+            <button onClick={() => setShowTriggerMenu(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-wz-red/20 border border-wz-red/30 hover:bg-wz-red hover:text-white flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors relative group">
               <span className="text-xl">⚡</span>
-              <span className="text-[10px] sm:text-xs font-mono font-bold text-white/80">TRIGGER HUB</span>
+              <div className="flex flex-col items-start">
+                <span className="text-[10px] sm:text-xs font-mono font-bold text-white/80">TRIGGER HUB</span>
+                <span className="text-[7px] font-mono text-wz-neon uppercase leading-none opacity-60 group-hover:opacity-100">
+                  {8 - (predictionUses + jinxUses)} ACTIONS LEFT
+                </span>
+              </div>
             </button>
 
             <button onClick={() => setShowMembersModal(true)} className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1 sm:gap-2 cursor-pointer transition-colors">
@@ -463,7 +452,7 @@ export default function BunkerPage() {
                   {event.type === 'PREDICTION' && (
                     <BunkerPredictionCard
                       {...event}
-                      onVote={(option) => voteBunkerPrediction({ predictionId: event.id, option, userId: user?.id, bunkerId: id })}
+                      onVote={(choiceIndex) => voteBunkerPrediction({ predictionId: event.id, choice: choiceIndex, userId: user?.id, bunkerId: id })}
                     />
                   )}
                   {event.type === 'JINX' && (
@@ -703,6 +692,25 @@ export default function BunkerPage() {
       {profileUser && (
         <QuickProfileModal user={profileUser} onClose={() => setProfileUser(null)} />
       )}
+
+      {/* --- Interactive Modals --- */}
+      <PredictionCreateModal 
+        isOpen={showPredictionModal}
+        onClose={() => setShowPredictionModal(false)}
+        usageCount={predictionUses}
+        totalLimit={4}
+        walletPoints={user?.totalWarPoints || 0}
+        onSubmit={(data) => triggerBunkerPrediction({ ...data, bunkerId: id, userId: user?.id, username: user?.username })}
+      />
+
+      <JinxCreateModal 
+        isOpen={showJinxModal}
+        onClose={() => setShowJinxModal(false)}
+        usageCount={jinxUses}
+        totalLimit={4}
+        walletPoints={user?.totalWarPoints || 0}
+        onSubmit={(prompt) => triggerBunkerJinx({ prompt, bunkerId: id, userId: user?.id, username: user?.username })}
+      />
     </div>
   );
 }

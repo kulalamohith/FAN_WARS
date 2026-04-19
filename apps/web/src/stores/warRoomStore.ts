@@ -43,6 +43,8 @@ interface WarRoomState {
   activeAdminEvent: { type: string; data: any } | null;
   isBunkerEnded: boolean;
   kickedUserId: string | null;
+  predictionUses: number;
+  jinxUses: number;
 
   // --- Bunker Interactive ---
   bunkerInteractiveEvents: any[]; // List of active/recent interactive cards
@@ -53,7 +55,7 @@ interface WarRoomState {
   sendMessage: (payload: { matchId: string; text: string; userId: string; username: string; rank: string; armyId: string; isHomeArmy: boolean }) => void;
   sendReaction: (payload: { matchId: string; type: string }) => void;
   
-  joinBunker: (bunkerId: string) => void;
+  joinBunker: (bunkerId: string, userId: string) => void;
   leaveBunker: (bunkerId: string) => void;
   sendBunkerMessage: (payload: { bunkerId: string; text: string; userId: string; username: string; rank: string; armyId: string }) => void;
   
@@ -83,6 +85,8 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   isBunkerEnded: false,
   kickedUserId: null,
   bunkerInteractiveEvents: [],
+  predictionUses: 0,
+  jinxUses: 0,
 
   connect: (matchId: string, userId?: string) => {
     // Prevent multiple connections
@@ -102,8 +106,8 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       socket.emit('join_war_room', { matchId, userId });
       // If a bunker join was queued before socket connected, send it now
       const pending = get().pendingBunkerId;
-      if (pending) {
-        socket.emit('join_bunker', pending);
+      if (pending && userId) {
+        socket.emit('join_bunker', { bunkerId: pending, userId });
       }
     });
 
@@ -205,6 +209,20 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       }));
     });
 
+    socket.on('bunker_active_state', (data: { prediction: any, jinx: any }) => {
+      const events = [];
+      if (data.prediction) events.push(data.prediction);
+      if (data.jinx) events.push(data.jinx);
+      set({ bunkerInteractiveEvents: events });
+    });
+
+    socket.on('bunker_usage_sync', (data: { predictionUses?: number, jinxUses?: number }) => {
+      set((state) => ({
+        predictionUses: data.predictionUses !== undefined ? data.predictionUses : state.predictionUses,
+        jinxUses: data.jinxUses !== undefined ? data.jinxUses : state.jinxUses,
+      }));
+    });
+
     set({ socket });
   },
 
@@ -230,11 +248,11 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
     }
   },
 
-  joinBunker: (bunkerId) => {
+  joinBunker: (bunkerId, userId) => {
     set({ pendingBunkerId: bunkerId, bunkerMessages: [], bunkerInteractiveEvents: [] });
     const { socket } = get();
     if (socket && get().isConnected) {
-      socket.emit('join_bunker', bunkerId);
+      socket.emit('join_bunker', { bunkerId, userId });
     }
   },
 
