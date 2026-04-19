@@ -53,5 +53,5 @@ EXPOSE 3000
 # Set working directory to the workspace for runtime context
 WORKDIR /app/apps/api-gateway
 
-# Run database push then start from the workspace context
-CMD npx prisma db push --accept-data-loss --schema prisma/schema.prisma && node dist/cluster.js
+# Run database push, seed, then start from the workspace context
+CMD npx prisma db push --accept-data-loss --schema prisma/schema.prisma && npx prisma db seed && node dist/cluster.js

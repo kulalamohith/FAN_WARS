@@ -8,7 +8,8 @@ import { RivalryEmblem, RivalryBrandHeader } from '../components/ui/RivalryLogo'
 import { api } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 
-const ARMIES = [
+// Fallback armies in case API is unavailable or still loading
+const FALLBACK_ARMIES = [
   { name: 'CSK', color: '#FFFF3C', logo: '/teams/csk.png', full: 'Chennai Super Kings' },
   { name: 'RCB', color: '#EC1C24', logo: '/teams/rcb.png', full: 'Royal Challengers' },
   { name: 'MI',  color: '#004BA0', logo: '/teams/mi.png', full: 'Mumbai Indians' },
@@ -20,6 +21,14 @@ const ARMIES = [
   { name: 'LSG', color: '#0057E2', logo: '/teams/lsg.png', full: 'Lucknow Super Giants' },
   { name: 'GT',  color: '#1B2133', logo: '/teams/gt.png', full: 'Gujarat Titans' },
 ];
+
+type Army = {
+  name: string;
+  colorHex?: string;
+  color?: string; // for UI compat
+  logo?: string;
+  full?: string;
+};
 
 type Step =
   | 'landing'
@@ -39,9 +48,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [selectedArmy, setSelectedArmy] = useState<typeof ARMIES[0] | null>(null);
+  const [armies, setArmies] = useState<Army[]>(FALLBACK_ARMIES);
+  const [selectedArmy, setSelectedArmy] = useState<Army | null>(null);
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetchingArmies, setFetchingArmies] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showTitle, setShowTitle] = useState(false);
@@ -49,14 +60,60 @@ export default function LoginPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const setAuth = useAuthStore((s) => s.setAuth);
 
+  // ── HYDRATION & REFRESH SURVIVAL ──
   useEffect(() => {
     setTimeout(() => setShowTitle(true), 300);
+
+    // Try to restore signup progress from sessionStorage
+    const saved = sessionStorage.getItem('wz_signup_state');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.email) setEmail(parsed.email);
+        if (parsed.step && parsed.step.startsWith('signup-')) setStep(parsed.step);
+        if (parsed.selectedArmy) setSelectedArmy(parsed.selectedArmy);
+        if (parsed.username) setUsername(parsed.username);
+      } catch (e) {
+        console.error('Failed to restore signup state:', e);
+      }
+    }
+
+    // Fetch live armies from backend
+    setFetchingArmies(true);
+    api.armies.list()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          // Merge with local fallback data to keep logos/colors if missing from DB
+          const enriched = data.map(dbArmy => {
+            const fallback = FALLBACK_ARMIES.find(f => f.name === dbArmy.name);
+            return {
+              ...dbArmy,
+              color: dbArmy.colorHex || fallback?.color || '#FFFFFF',
+              logo: fallback?.logo || '/teams/default.png',
+              full: fallback?.full || dbArmy.name
+            };
+          });
+          setArmies(enriched);
+        }
+      })
+      .catch((err) => console.warn('Using fallback armies. API error:', err))
+      .finally(() => setFetchingArmies(false));
   }, []);
+
+  // ── PERSISTENCE ──
+  useEffect(() => {
+    if (step.startsWith('signup-')) {
+      sessionStorage.setItem('wz_signup_state', JSON.stringify({
+        email, step, selectedArmy, username
+      }));
+    }
+  }, [email, step, selectedArmy, username]);
 
   const clearForm = () => {
     setEmail(''); setPassword(''); setConfirmPassword('');
     setOtp(''); setUsername(''); setSelectedArmy(null);
     setError(''); setSuccess('');
+    sessionStorage.removeItem('wz_signup_state');
   };
 
   // ── SIGN IN ──
@@ -497,7 +554,7 @@ export default function LoginPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-6">
-                {ARMIES.map((army, i) => (
+                {armies.map((army, i) => (
                   <motion.button
                     key={army.name}
                     initial={{ opacity: 0, y: 20 }}
