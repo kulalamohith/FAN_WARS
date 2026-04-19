@@ -708,7 +708,7 @@ export default function BunkerPage() {
         onClose={() => setShowJinxModal(false)}
         usageCount={jinxUses}
         totalLimit={4}
-        walletPoints={user?.totalWarPoints || 0}
+        walletPoints={Number(user?.totalWarPoints || 0)}
         onSubmit={(prompt) => triggerBunkerJinx({ prompt, bunkerId: id, userId: user?.id, username: user?.username })}
       />
     </div>
