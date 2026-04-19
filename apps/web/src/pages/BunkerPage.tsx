@@ -699,7 +699,7 @@ export default function BunkerPage() {
         onClose={() => setShowPredictionModal(false)}
         usageCount={predictionUses}
         totalLimit={4}
-        walletPoints={user?.totalWarPoints || 0}
+        walletPoints={Number(user?.totalWarPoints || 0)}
         onSubmit={(data) => triggerBunkerPrediction({ ...data, bunkerId: id, userId: user?.id, username: user?.username })}
       />
 
