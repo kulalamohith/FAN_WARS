@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import WarzoneButton from './WarzoneButton';
+import WarzoneButton from '../ui/WarzoneButton';
 
 interface PredictionProps {
   id: string;
