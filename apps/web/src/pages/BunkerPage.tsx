@@ -455,6 +455,28 @@ export default function BunkerPage() {
             </div>
           )}
 
+          {/* ⚡ INTERACTIVE ROOM EVENTS ⚡ */}
+          <div className="flex flex-col gap-4 mb-2">
+            <AnimatePresence>
+              {bunkerInteractiveEvents.map((event: any) => (
+                <div key={event.id}>
+                  {event.type === 'PREDICTION' && (
+                    <BunkerPredictionCard
+                      {...event}
+                      onVote={(option) => voteBunkerPrediction({ predictionId: event.id, option, userId: user?.id, bunkerId: id })}
+                    />
+                  )}
+                  {event.type === 'JINX' && (
+                    <BunkerJinxCard
+                      {...event}
+                      onTap={(side) => tapBunkerJinx({ bunkerId: id, userId: user?.id, side })}
+                    />
+                  )}
+                </div>
+              ))}
+            </AnimatePresence>
+          </div>
+
           {/* Chat Messages */}
           <div className="flex flex-col gap-3">
             {bunkerMessages.length === 0 ? (

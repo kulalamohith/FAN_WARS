@@ -82,6 +82,7 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
   activeAdminEvent: null,
   isBunkerEnded: false,
   kickedUserId: null,
+  bunkerInteractiveEvents: [],
 
   connect: (matchId: string, userId?: string) => {
     // Prevent multiple connections
