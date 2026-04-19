@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,6 +41,8 @@ export default function BunkerPage() {
 
   const [messageReactions, setMessageReactions] = useState<Record<string, { toxic: number, fire: number, clown: number }>>({});
   const [challengerMsg, setChallengerMsg] = useState<any | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   const handleMsgReact = (msgId: string, type: 'toxic' | 'fire' | 'clown') => {
     setMessageReactions(prev => ({
@@ -179,6 +181,27 @@ export default function BunkerPage() {
     if (type === 'crown') return '👑';
     if (type === 'mindblown') return '🤯';
     return '🔥';
+  };
+
+  // Unify timeline logic
+  const unifiedTimeline = useMemo(() => {
+    const msgs = bunkerMessages.map(m => ({ ...m, timelineType: 'MESSAGE' as const, sortKey: new Date(m.timestamp).getTime() }));
+    const evts = bunkerInteractiveEvents.map(e => ({ ...e, timelineType: 'EVENT' as const, sortKey: new Date(e.createdAt || e.expiresAt || Date.now()).getTime() }));
+    
+    return [...msgs, ...evts].sort((a, b) => a.sortKey - b.sortKey);
+  }, [bunkerMessages, bunkerInteractiveEvents]);
+
+  // Handle Scroll
+  useEffect(() => {
+    if (shouldAutoScroll && scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [unifiedTimeline, shouldAutoScroll]);
+
+  const handleScrollArea = (e: React.UIEvent<HTMLElement>) => {
+    const target = e.currentTarget;
+    const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 100;
+    setShouldAutoScroll(isAtBottom);
   };
 
   // === Loading & Error States ===
@@ -351,7 +374,10 @@ export default function BunkerPage() {
       </header>
 
       {/* === Main Content Area (Scrollable) === */}
-      <main className="flex-1 relative z-10 overflow-y-auto pt-4 pb-48 scrollbar-hide">
+      <main 
+        className="flex-1 relative z-10 overflow-y-auto pt-4 pb-48 scrollbar-hide"
+        onScroll={handleScrollArea}
+      >
         <div className="max-w-xl mx-auto px-4 flex flex-col gap-4 min-h-full justify-end">
           
           {/* Admin Event Banner */}
@@ -368,115 +394,50 @@ export default function BunkerPage() {
             </motion.div>
           )}
 
-          {/* Predictions Deck */}
-          {allActivePredictions.length > 0 && (
-            <div className="sticky top-0 z-30 flex flex-col gap-3 py-4 -mx-4 px-4 bg-gradient-to-b from-black/80 to-transparent">
-              <AnimatePresence>
-                {allActivePredictions.map((pred: any) => {
-                  const timeLeft = Math.max(0, Math.floor((new Date(pred.expiresAt).getTime() - currentTime) / 1000));
-                  const hasVoted = votedPredictions.has(pred.id);
-
-                  return (
-                    <motion.div
-                      key={pred.id}
-                      initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                      className="glass-card p-4 border-wz-yellow/30 shadow-[0_0_20px_rgba(255,214,10,0.1)] relative overflow-hidden"
-                    >
-                      {/* ... Prediction logic same as WarRoom ... */}
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">⚡</span>
-                          <div>
-                            <h3 className="text-wz-yellow font-display font-bold text-sm">CLUTCH PREDICTION</h3>
-                            <p className="text-white text-xs font-mono">{pred.question}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="block text-wz-glow text-lg font-black font-display leading-none">+{pred.pointsReward}</span>
-                          <span className="text-[10px] text-wz-muted font-mono uppercase">WAR POINTS</span>
-                        </div>
-                      </div>
-
-                      {hasVoted ? (
-                        <div className="bg-wz-neon/10 border border-wz-neon/30 rounded-lg py-2 text-center text-wz-neon text-xs font-bold font-mono">
-                          VOTE LOCKED IN ✓
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <WarzoneButton
-                            variant="primary"
-                            className="flex-1 py-2 text-xs"
-                            onClick={() => voteMutation.mutate({ predId: pred.id, option: 'A' })}
-                            disabled={timeLeft <= 0 || voteMutation.isPending}
-                          >
-                            {pred.optionA}
-                          </WarzoneButton>
-                          <WarzoneButton
-                            variant="primary"
-                            className="flex-1 py-2 text-xs"
-                            onClick={() => voteMutation.mutate({ predId: pred.id, option: 'B' })}
-                            disabled={timeLeft <= 0 || voteMutation.isPending}
-                          >
-                            {pred.optionB}
-                          </WarzoneButton>
-                        </div>
-                      )}
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <motion.div
-                            className="h-full bg-wz-yellow"
-                            initial={{ width: '100%' }}
-                            animate={{ width: `${(timeLeft / 60) * 100}%` }}
-                            transition={{ duration: 1, ease: 'linear' }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-wz-yellow font-mono whitespace-nowrap">
-                          {timeLeft > 0 ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')} min left` : 'LOCKING...'}
-                        </span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {/* ⚡ INTERACTIVE ROOM EVENTS ⚡ */}
-          <div className="flex flex-col gap-4 mb-2">
-            <AnimatePresence>
-              {bunkerInteractiveEvents.map((event: any) => (
-                <div key={event.id}>
-                  {event.type === 'PREDICTION' && (
-                    <BunkerPredictionCard
-                      {...event}
-                      onVote={(choiceIndex) => voteBunkerPrediction({ predictionId: event.id, choice: choiceIndex, userId: user?.id, bunkerId: id })}
-                    />
-                  )}
-                  {event.type === 'JINX' && (
-                    <BunkerJinxCard
-                      {...event}
-                      onTap={(side) => tapBunkerJinx({ bunkerId: id, userId: user?.id, side })}
-                    />
-                  )}
-                </div>
-              ))}
-            </AnimatePresence>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="flex flex-col gap-3">
-            {bunkerMessages.length === 0 ? (
+          {/* Unified Timeline View */}
+          <div className="flex flex-col gap-6">
+            {unifiedTimeline.length === 0 ? (
               <div className="text-center py-10 opacity-30 mt-auto">
                 <p className="text-4xl mb-2">🤫</p>
                 <p className="text-white font-mono text-xs">The room is silent. Drop a message.</p>
               </div>
             ) : (
-              bunkerMessages.map((msg, i) => {
+              unifiedTimeline.map((item: any, i) => {
+                if (item.timelineType === 'EVENT') {
+                  const event = item;
+                  return (
+                    <motion.div 
+                      key={event.id}
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      className="relative px-2 py-1"
+                    >
+                      <div className="absolute -left-2 top-0 bottom-0 w-0.5 bg-wz-yellow/10 rounded-full" />
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[9px] font-mono font-black text-wz-yellow/60 tracking-widest uppercase">ROOM EVENT</span>
+                        <span className="text-[8px] font-mono text-white/20">{new Date(event.createdAt || event.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {event.type === 'PREDICTION' && (
+                        <BunkerPredictionCard
+                          {...event}
+                          onVote={(choiceIndex) => voteBunkerPrediction({ predictionId: event.id, choice: choiceIndex, userId: user?.id, bunkerId: id })}
+                        />
+                      )}
+                      {event.type === 'JINX' && (
+                        <BunkerJinxCard
+                          {...event}
+                          onTap={(side) => tapBunkerJinx({ bunkerId: id, userId: user?.id, side })}
+                        />
+                      )}
+                    </motion.div>
+                  );
+                }
+
+                // Chat Message Rendering
+                const msg = item;
                 const isMe = msg.userId === user?.id;
-                const showHeader = i === 0 || bunkerMessages[i - 1].userId !== msg.userId;
+                const prevMsg = i > 0 ? unifiedTimeline[i-1] : null;
+                const showHeader = !prevMsg || prevMsg.timelineType !== 'MESSAGE' || prevMsg.userId !== msg.userId;
 
                 return (
                   <motion.div
@@ -517,24 +478,17 @@ export default function BunkerPage() {
                     </div>
 
                     {!isMe && (
-                      <div className="flex items-center gap-1.5 mt-1 pl-1">
-                        <button onClick={() => handleMsgReact(msg.id, 'toxic')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                          ☠️ <span className={messageReactions[msg.id]?.toxic ? 'text-white' : ''}>{messageReactions[msg.id]?.toxic || 0}</span>
-                        </button>
-                        <button onClick={() => handleMsgReact(msg.id, 'fire')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                          🔥 <span className={messageReactions[msg.id]?.fire ? 'text-white' : ''}>{messageReactions[msg.id]?.fire || 0}</span>
-                        </button>
-                        <button onClick={() => handleMsgReact(msg.id, 'clown')} className="flex items-center gap-1 text-[9px] font-mono bg-black/40 hover:bg-white/10 rounded px-1.5 py-0.5 text-white/50 border border-white/5 transition-colors">
-                          🤡 <span className={messageReactions[msg.id]?.clown ? 'text-white' : ''}>{messageReactions[msg.id]?.clown || 0}</span>
-                        </button>
+                      <div className="flex items-center gap-1.5 mt-1 pl-1 text-[8px] font-mono text-white/20 italic">
+                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     )}
                   </motion.div>
                 );
               })
             )}
+            
             {/* Auto-scroll anchor */}
-            <div className="h-4" />
+            <div ref={scrollRef} className="h-4" />
           </div>
         </div>
       </main>

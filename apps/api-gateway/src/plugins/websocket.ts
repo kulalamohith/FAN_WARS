@@ -391,6 +391,7 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
       }
 
       const battleId = `jinx_${Date.now()}`;
+      const createdAt = new Date().toISOString();
       const jinxPayload = {
         id: battleId,
         type: 'JINX',
@@ -398,7 +399,8 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         prompt,
         countA: 0,
         countB: 0,
-        expiresAt: new Date(Date.now() + 5000),
+        expiresAt: new Date(Date.now() + 15000), // 15s Battle
+        createdAt
       };
 
       activeBunkerJinx[bunkerId] = {

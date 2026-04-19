@@ -143,6 +143,10 @@ const BunkerJinxCard: React.FC<JinxProps> = ({
             animate={{ opacity: 1, scale: 1 }}
             className="absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20"
           >
+            <div className="absolute top-4 left-4 flex items-center gap-2">
+              <span className="text-[8px] font-mono font-black text-white/30 tracking-[0.3em] uppercase">STMT REFERENCE</span>
+            </div>
+            
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 0.5, repeat: 3 }}
@@ -150,11 +154,17 @@ const BunkerJinxCard: React.FC<JinxProps> = ({
             >
               🏆
             </motion.div>
-            <h4 className="text-wz-yellow text-xl font-display font-black tracking-widest uppercase mb-1">
+            
+            <div className="mb-4">
+              <span className="text-[10px] text-white/40 font-mono uppercase block mb-1">ORIGINAL STATEMENT</span>
+              <p className="text-white text-sm font-bold italic uppercase px-4">"{prompt}"</p>
+            </div>
+
+            <h4 className="text-wz-yellow text-xl font-display font-black tracking-widest uppercase mb-1 drop-shadow-[0_0_10px_rgba(255,214,10,0.5)]">
               WINNER: {winner}
             </h4>
-            <div className="text-white/60 font-mono text-xs mb-4">
-              FINAL SCORE: {countA} - {countB}
+            <div className="text-white font-mono text-sm mb-4 font-black">
+              FINAL SCORE: <span className="text-wz-yellow">{countA}</span> - <span className="text-wz-neon">{countB}</span>
             </div>
             <p className="text-[10px] text-wz-neon font-mono font-bold bg-wz-neon/10 px-3 py-1 rounded-full border border-wz-neon/20">
               REWARDS DISTRIBUTED TO WINNING CAMP
