@@ -273,9 +273,11 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
           question,
           options,
           votesCount: options.map(() => 0),
-          expiresAt: new Date(Date.now() + 60000), // 60 seconds
+          expiresAt: new Date(Date.now() + 12000), // 12 seconds
         }
       });
+
+      const expiresAt = prediction.expiresAt;
 
       const payload = {
         id: prediction.id,
@@ -284,7 +286,9 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
         question: prediction.question,
         options: prediction.options,
         votesCount: prediction.votesCount,
-        expiresAt: prediction.expiresAt,
+        expiresAt: expiresAt,
+        isComplete: false,
+        winnerIndex: -1
       };
 
       // 3. Store in memory and Broadcast to ALL
@@ -294,6 +298,45 @@ const websocketPlugin: FastifyPluginAsync = async (fastify, options) => {
       // Update usage for the creator immediately
       const pCount = await getDailyCountForUser(userId, 'BUNKER_PREDICTION_TRIGGER' as any);
       socket.emit('bunker_usage_sync', { predictionUses: pCount });
+
+      // Auto-resolution Timer (13s to allow for network delay)
+      setTimeout(async () => {
+        try {
+          const latest = await db.bunkerPrediction.findUnique({ where: { id: prediction.id } });
+          if (!latest || latest.status !== 'ACTIVE') return;
+
+          // Determine Winner
+          const counts = latest.votesCount;
+          const maxVotes = Math.max(...counts);
+          const winners = counts.map((v, i) => v === maxVotes ? i : -1).filter(i => i !== -1);
+          
+          const winnerIndex = (winners.length === 1 && maxVotes > 0) ? winners[0] : -1; // -1 means Tie or No Votes
+
+          await db.bunkerPrediction.update({
+            where: { id: prediction.id },
+            data: { status: 'CLOSED' }
+          });
+
+          const resultPayload = {
+            id: prediction.id,
+            votesCount: latest.votesCount,
+            winnerIndex,
+            isComplete: true
+          };
+
+          // Wipe memory and broadcast
+          if (activeBunkerPredictions[bunkerId]?.id === prediction.id) {
+            activeBunkerPredictions[bunkerId] = {
+              ...activeBunkerPredictions[bunkerId],
+              ...resultPayload
+            };
+          }
+
+          io.to(`bunker_${bunkerId}`).emit('bunker_prediction_result', resultPayload);
+        } catch (err) {
+          fastify.log.error(`[Prediction Closure] Failed to close ${prediction.id}: ${err}`);
+        }
+      }, 13000);
     });
 
     socket.on('bunker_prediction_vote', async (data: { predictionId: string; choice: number; userId: string; bunkerId: string }) => {

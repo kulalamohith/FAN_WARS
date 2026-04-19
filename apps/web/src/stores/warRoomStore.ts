@@ -185,10 +185,18 @@ export const useWarRoomStore = create<WarRoomState>((set, get) => ({
       }));
     });
 
-    socket.on('bunker_prediction_sync', (data: { id: string, votesA: number, votesB: number }) => {
+    socket.on('bunker_prediction_sync', (data: { id: string, votesCount: number[] }) => {
       set((state) => ({
         bunkerInteractiveEvents: state.bunkerInteractiveEvents.map(e => 
-          e.id === data.id ? { ...e, votesA: data.votesA, votesB: data.votesB } : e
+          e.id === data.id ? { ...e, votesCount: data.votesCount } : e
+        )
+      }));
+    });
+
+    socket.on('bunker_prediction_result', (data: { id: string, votesCount: number[], winnerIndex: number, isComplete: boolean }) => {
+      set((state) => ({
+        bunkerInteractiveEvents: state.bunkerInteractiveEvents.map(e => 
+          e.id === data.id ? { ...e, votesCount: data.votesCount, winnerIndex: data.winnerIndex, isComplete: data.isComplete } : e
         )
       }));
     });
