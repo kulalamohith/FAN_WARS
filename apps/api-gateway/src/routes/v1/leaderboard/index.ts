@@ -61,7 +61,12 @@ export const leaderboardRoutes: FastifyPluginAsync = async (fastify) => {
     } catch { /* fall through */ }
 
     // 2. DB query
+    const VALID_ARMY_NAMES = ['CSK', 'RCB', 'MI', 'KKR', 'SRH', 'DC', 'PBKS', 'RR', 'LSG', 'GT'];
+    
     const armies = await db.army.findMany({
+      where: {
+        name: { in: VALID_ARMY_NAMES }
+      },
       include: { users: { select: { totalWarPoints: true } } },
     });
 
